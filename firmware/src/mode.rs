@@ -165,15 +165,54 @@ pub fn line_isolated(ram: &mut Ram, l: Line) -> bool {
     ram::LINE_ISOLATED.get(ram) & (l.mask() as u8) != 0
 }
 
+/// Ligne coupée temporairement : latch-up en cours (FDIR, `LU_OFF_LEFT`) ou `PowerCycle`
+/// (TC, `PWRCYC_LINES` tant que `PWRCYC_LEFT > 0`). Vaut aussi pour la Radio (coupure brève,
+/// jamais d'isolement).
+pub fn line_cut(ram: &mut Ram, l: Line) -> bool {
+    if crate::tasks::fdir::line_cut(ram, l) {
+        return true;
+    }
+    ram::PWRCYC_LEFT.get(ram) > 0 && ram::PWRCYC_LINES.get(ram) & (l.mask() as u8) != 0
+}
+
+/// Durée de coupure d'une TC `PowerCycle` (s, SPEC §5).
+pub const PWRCYC_S: u8 = 5;
+
+/// TC `PowerCycle` (à appeler par `comms_rx`) : coupe `l` immédiatement pour `PWRCYC_S` cycles
+/// (le cycle courant compris), puis réarme. Valable pour la Radio.
+pub fn start_power_cycle<H: Hal>(ram: &mut Ram, hal: &mut H, l: Line) {
+    let lines = ram::PWRCYC_LINES.get(ram) | l.mask() as u8;
+    ram::PWRCYC_LINES.set(ram, lines);
+    ram::PWRCYC_LEFT.set(ram, PWRCYC_S);
+    apply_lines(ram, hal);
+}
+
+/// Décompte de la coupure `PowerCycle`, une fois par cycle (début de cycle, `sched`). Lecture
+/// bornée à `PWRCYC_S` (R13) : une valeur corrompue ne coupe jamais une ligne plus de 5 s.
+pub fn tick_power_cycle(ram: &mut Ram) {
+    let left = ram::PWRCYC_LEFT.get(ram).min(PWRCYC_S).saturating_sub(1);
+    ram::PWRCYC_LEFT.set(ram, left);
+    if left == 0 && ram::PWRCYC_LINES.get(ram) != 0 {
+        ram::PWRCYC_LINES.set(ram, 0);
+    }
+}
+
 /// Valeur attendue de `Reg::LoadSwitches`, recalculée à partir des cellules (jamais stockée) :
-/// Radio toujours alimentée ; Payload ssi `Nominal` et non isolée ; Heater selon le thermostat
-/// et non isolée.
+/// Radio alimentée sauf coupure temporaire ; Payload ssi `Nominal`, non isolée, non coupée ;
+/// Heater selon le thermostat, non isolée, non coupée.
 pub fn commanded_lines(ram: &mut Ram) -> u16 {
-    let mut v = Line::Radio.mask();
-    if current(ram) == Mode::Nominal && !line_isolated(ram, Line::Payload) {
+    let mut v = 0;
+    if !line_cut(ram, Line::Radio) {
+        v |= Line::Radio.mask();
+    }
+    if current(ram) == Mode::Nominal
+        && !line_isolated(ram, Line::Payload)
+        && !line_cut(ram, Line::Payload)
+    {
         v |= Line::Payload.mask();
     }
-    if ram::HEATER_ON.get(ram) && !line_isolated(ram, Line::Heater) {
+    if ram::HEATER_ON.get(ram) && !line_isolated(ram, Line::Heater) && !line_cut(ram, Line::Heater)
+    {
         v |= Line::Heater.mask();
     }
     v

@@ -8,14 +8,27 @@
 //! (`min(valeur, période)`, R13) : un compteur corrompu avance l'émission, il ne la supprime
 //! jamais. En cas d'échec d'émission, le compteur reste à la période : nouvel essai au cycle
 //! suivant. Au boot le compteur vaut `u16::MAX` : première balise au premier cycle.
-//! `line_state` = registre `LoadSwitches` RELU (état réel, pas l'état commandé).
-//! Le journal (`DumpEvents`) est T-011.
+//! `line_state` = registre `LoadSwitches` RELU (état réel, pas l'état commandé). Tous les
+//! champs de la balise (28 octets) viennent de cellules réelles : `boot_count` relu de la NVM
+//! (T-011), `fdir_flags` porte `NVM_LOST`, compteurs de réparation, rejets, latch-up (T-012).
+//!
+//! Journal (`DumpEvents`) : une trame EVENTS par cycle tant qu'un vidage est en cours (format
+//! dans `log`), sans nouvel essai en cas d'échec d'émission.
+//!
+//! `Reboot` (SPEC §5 : `sys_reset` APRÈS l'ACK) : l'ACK est émis en premier dans ce cycle, puis
+//! `sys_reset` si `REBOOT_PENDING` est non nul. Si une écriture NVM est en attente (SEQ du
+//! `Reboot` pas encore persisté), elle est retentée d'abord ; le reset attend au plus
+//! `REBOOT_NVM_TRIES` cycles une NVM à jour, puis a lieu quand même (NVM en panne permanente :
+//! le reset ne doit pas être bloqué).
 
 use crate::hal::{Hal, Reg, MAX_FRAME};
+use crate::log::{self, ev};
 use crate::mode;
-use crate::proto::{self, Ack, AckResult, Beacon};
+use crate::nvm;
+use crate::proto::{self, Ack, AckResult, Beacon, MAX_PAYLOAD};
 use crate::ram::{self, Ram};
 use crate::sched;
+use crate::tasks::comms_rx::REBOOT_NVM_TRIES;
 
 fn next_tm_seq(ram: &mut Ram) -> u32 {
     let s = ram::TM_SEQ.get(ram).wrapping_add(1);
@@ -80,8 +93,40 @@ fn beacon_due<H: Hal>(ram: &mut Ram, hal: &mut H) {
     }
 }
 
+/// Une trame EVENTS si un vidage du journal est en cours.
+fn events_due<H: Hal>(ram: &mut Ram, hal: &mut H) {
+    let mut p = [0u8; MAX_PAYLOAD];
+    let n = match log::dump_next(ram, &mut p) {
+        Some(n) => n,
+        None => return,
+    };
+    let seq = next_tm_seq(ram);
+    let mut out = [0u8; MAX_FRAME];
+    if let Ok(len) = proto::encode_events(seq, &p[..n], &mut out) {
+        let _ = hal.radio_send(&out[..len]);
+    }
+}
+
+/// `sys_reset` différé d'un `Reboot` accepté (après l'ACK, émis plus haut dans ce cycle).
+fn reboot_due<H: Hal>(ram: &mut Ram, hal: &mut H) {
+    let tries = ram::REBOOT_PENDING.get(ram).min(REBOOT_NVM_TRIES);
+    if tries == 0 {
+        return;
+    }
+    let nvm_ok = nvm::service(ram, hal);
+    if nvm_ok || tries == 1 {
+        ram::REBOOT_PENDING.set(ram, 0);
+        log::push(ram, ev::REBOOT_RESET, nvm_ok as u8, 0);
+        hal.sys_reset();
+    } else {
+        ram::REBOOT_PENDING.set(ram, tries - 1);
+    }
+}
+
 pub fn run<H: Hal>(ram: &mut Ram, hal: &mut H) {
     send_ack(ram, hal);
     beacon_due(ram, hal);
+    events_due(ram, hal);
+    reboot_due(ram, hal);
     sched::set_flag(ram, sched::FLAG_TELEMETRY);
 }

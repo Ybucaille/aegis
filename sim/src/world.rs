@@ -1035,7 +1035,7 @@ mod tests {
     #[test]
     fn nvm_kept_ram_cleared_on_reset() {
         let mut w = world(0, 80.0);
-        w.hw_mut().nvm_write(7, &[0xAB, 0xCD]).unwrap();
+        w.hw_mut().nvm_write(0xF0, &[0xAB, 0xCD]).unwrap();
         w.firmware_mut().ram_mut()[100] = 0xEE;
         w.hw_mut().sys_reset();
         w.step();
@@ -1045,7 +1045,7 @@ mod tests {
         assert_eq!(w.cpu(), Cpu::Running);
         assert_eq!(w.firmware_mut().ram_mut()[100], 0);
         let mut b = [0u8; 2];
-        w.hw_mut().nvm_read(7, &mut b).unwrap();
+        w.hw_mut().nvm_read(0xF0, &mut b).unwrap();
         assert_eq!(b, [0xAB, 0xCD]);
         assert_eq!(w.hw_mut().reset_cause(), ResetCause::Commanded);
     }

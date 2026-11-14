@@ -13,7 +13,9 @@
 
 pub mod ecc;
 pub mod hal;
+pub mod log;
 pub mod mode;
+pub mod nvm;
 #[cfg(all(test, not(feature = "unprotected")))]
 mod protection_tests;
 pub mod proto;

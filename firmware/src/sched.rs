@@ -35,8 +35,19 @@ pub fn set_flag(ram: &mut Ram, flag: u8) {
     ram::EXEC_FLAGS.set(ram, f);
 }
 
-/// Démarrage : RAM effacée, valeurs par défaut, registres écrits. NVM : T-011.
+/// Démarrage complet : `boot_erase`, relecture NVM, `boot_finish`.
+///
+/// CÂBLAGE NVM (manager, après T-011) : `nvm::boot_load(ram, hal)` s'insère ENTRE les deux
+/// appels ci-dessous : `fdir::on_boot` (dans `boot_finish`) doit voir le compteur de boots
+/// courts et les isolations relus de la NVM.
 pub fn boot<H: Hal>(ram: &mut Ram, hal: &mut H) {
+    boot_erase(ram, hal);
+    crate::nvm::boot_load(ram, hal);
+    boot_finish(ram, hal);
+}
+
+/// Première moitié du boot : RAM effacée, cause de reset lue, valeurs par défaut.
+pub fn boot_erase<H: Hal>(ram: &mut Ram, hal: &mut H) {
     *ram = [0; crate::hal::RAM_SIZE];
     let cause = hal.reset_cause();
     ram::RESET_CAUSE.set(ram, cause as u8);
@@ -44,6 +55,11 @@ pub fn boot<H: Hal>(ram: &mut Ram, hal: &mut H) {
     ram::CEILING.set(ram, Mode::Nominal as u8);
     ram::WDG_KEY.set(ram, WDG_KEY_A);
     ram::BEACON_ELAPSED.set(ram, u16::MAX);
+}
+
+/// Seconde moitié du boot (après la NVM) : tempête de resets, registres, lignes.
+pub fn boot_finish<H: Hal>(ram: &mut Ram, hal: &mut H) {
+    tasks::fdir::on_boot(ram);
     hal.reg_write(Reg::WdgTimeout, WDG_TIMEOUT_S);
     hal.reg_write(Reg::WdgCtrl, WDG_CTRL_VALUE);
     hal.reg_write(Reg::RadioCfg, RADIO_CFG_VALUE);
@@ -54,6 +70,7 @@ pub fn begin_cycle(ram: &mut Ram) {
     ram::EXEC_FLAGS.set(ram, 0);
     let up = ram::UPTIME.get(ram).saturating_add(1);
     ram::UPTIME.set(ram, up);
+    mode::tick_power_cycle(ram);
 }
 
 /// Fin de cycle : décision et émission du rechargement du watchdog. Renvoie `true` si émis.
@@ -156,6 +173,30 @@ mod tests {
         assert_eq!(b[0].reset_cause, crate::ResetCause::PowerOn as u8);
     }
 
+    /// Image RAM attendue juste après `boot_erase` : zéro partout sauf les défauts.
+    fn erased_image(cause: crate::ResetCause) -> [u8; RAM_SIZE] {
+        let mut zero = [0u8; RAM_SIZE];
+        ram::RESET_CAUSE.set(&mut zero, cause as u8);
+        ram::MODE.set(&mut zero, Mode::Survie as u8);
+        ram::CEILING.set(&mut zero, Mode::Nominal as u8);
+        ram::WDG_KEY.set(&mut zero, WDG_KEY_A);
+        ram::BEACON_ELAPSED.set(&mut zero, u16::MAX);
+        zero
+    }
+
+    #[test]
+    fn boot_erase_alone_erases_ram_and_reads_reset_cause() {
+        let mut ram = [0xEEu8; RAM_SIZE];
+        let mut hal = MockHal::nominal();
+        hal.reset_cause = crate::ResetCause::Watchdog;
+        boot_erase(&mut ram, &mut hal);
+        // Hors des cellules initialisées (toutes leurs copies / voies), tout est à zéro.
+        assert_eq!(ram[..], erased_image(crate::ResetCause::Watchdog)[..]);
+        // Aucun accès NVM ni registre : seulement la lecture de la cause.
+        assert!(hal.nvm.iter().all(|&b| b == 0xFF));
+        assert_eq!(hal.regs[Reg::WdgCtrl as usize], 0);
+    }
+
     #[test]
     fn boot_erases_ram_and_reads_reset_cause() {
         let mut fw = Firmware::new();
@@ -173,14 +214,76 @@ mod tests {
         hal0.reset_cause = crate::ResetCause::Watchdog;
         fw0.boot(&mut hal0);
         assert_eq!(ram[..], fw0.ram_mut()[..]);
-        // Hors des cellules initialisées (toutes leurs copies / voies), tout est à zéro.
-        let mut zero = [0u8; RAM_SIZE];
-        ram::RESET_CAUSE.set(&mut zero, crate::ResetCause::Watchdog as u8);
-        ram::MODE.set(&mut zero, Mode::Survie as u8);
-        ram::CEILING.set(&mut zero, Mode::Nominal as u8);
-        ram::WDG_KEY.set(&mut zero, WDG_KEY_A);
-        ram::BEACON_ELAPSED.set(&mut zero, u16::MAX);
-        assert_eq!(ram[..], zero[..]);
+        // Image exacte, construite à la main : défauts de `boot_erase`, puis effets de
+        // `nvm::boot_load` sur NVM vierge, puis `fdir::on_boot`. Tout le reste est à zéro.
+        let mut want = erased_image(crate::ResetCause::Watchdog);
+        // `boot_load` : NVM vierge -> défauts, boot_count 0 + 1, aucune copie valide, chargé.
+        ram::BOOT_COUNT.set(&mut want, 1);
+        ram::NVM_STATUS.set(&mut want, crate::nvm::STATUS_LOADED);
+        crate::log::push(&mut want, crate::log::ev::NVM_FORMAT, 0, 0);
+        crate::log::push(
+            &mut want,
+            crate::log::ev::BOOT,
+            crate::ResetCause::Watchdog as u8,
+            1,
+        );
+        // Écriture des 3 copies réussie : NVM_PENDING reste 0.
+        if !cfg!(feature = "unprotected") {
+            // `fdir::on_boot` : ce boot compte comme court, persistance demandée.
+            ram::SHORT_BOOTS.set(&mut want, 1);
+            ram::NVM_PENDING.set(&mut want, 1);
+        }
+        assert_eq!(ram[..], want[..]);
+        // NVM formatée : les 3 copies portent boot_count = 1.
+        let p = crate::nvm::Persist {
+            boot_count: 1,
+            ..crate::nvm::Persist::DEFAULT
+        };
+        for &o in &crate::nvm::COPY_OFF {
+            let o = o as usize;
+            assert_eq!(hal.nvm[o..o + crate::nvm::BLOCK_LEN], p.encode()[..]);
+        }
+    }
+
+    /// NVM valide (last_tc_seq = N, boot_count = K) : `boot` relit N et K + 1 ; une TC de
+    /// SEQ <= N est rejetée, N + 1 acceptée.
+    #[test]
+    fn boot_reloads_nvm_and_rejects_old_seq() {
+        const N: u32 = 1234;
+        const K: u16 = 9;
+        let b = crate::nvm::Persist {
+            boot_count: K,
+            last_tc_seq: N,
+            ..crate::nvm::Persist::DEFAULT
+        }
+        .encode();
+        for seq in [0, 1, N - 1, N] {
+            let mut hal = MockHal::nominal();
+            for &o in &crate::nvm::COPY_OFF {
+                let o = o as usize;
+                hal.nvm[o..o + crate::nvm::BLOCK_LEN].copy_from_slice(&b);
+            }
+            let mut fw = Firmware::new();
+            fw.ram_mut().fill(0xEE);
+            fw.boot(&mut hal);
+            let ram = fw.ram_mut();
+            assert_eq!(ram::LAST_TC_SEQ.get(ram), N);
+            assert_eq!(ram::BOOT_COUNT.get(ram), K + 1);
+            assert_eq!(ram::CNT_TC_REJECTED.get(ram), 0);
+            hal.push_tc(seq, &Command::Ping);
+            assert_eq!(fw.step(&mut hal).executed_tc, None, "seq {seq}");
+            assert!(hal.acks().is_empty(), "seq {seq}");
+            assert_eq!(ram::CNT_TC_REJECTED.get(fw.ram_mut()), 1, "seq {seq}");
+            assert_eq!(ram::LAST_TC_SEQ.get(fw.ram_mut()), N);
+            // La suivante passe.
+            hal.push_tc(N + 1, &Command::Ping);
+            assert_eq!(
+                fw.step(&mut hal).executed_tc,
+                Some((N + 1, proto::opcode::PING))
+            );
+            let bc = *hal.beacons().last().unwrap();
+            assert_eq!(bc.boot_count, K + 1);
+        }
     }
 
     #[test]
@@ -299,16 +402,29 @@ mod tests {
         assert!(hal.line_on(heater));
     }
 
+    /// Sans température valide : boucle ouverte selon `ISolar` (révision T-012).
     #[test]
-    fn no_temperature_turns_heater_off() {
-        let (mut fw, mut hal) = booted();
-        hal.set_temp(-30);
-        fw.step(&mut hal);
-        assert!(hal.line_on(Line::Heater.mask()));
-        hal.set(SensorId::TempBattA, Err(HalError::NotPowered));
-        hal.set(SensorId::TempBattB, Ok(i16::MAX));
-        fw.step(&mut hal);
-        assert!(!hal.line_on(Line::Heater.mask()));
+    fn no_temperature_heater_open_loop() {
+        use crate::tasks::thermal::{DUTY_ECLIPSE_S, DUTY_PERIOD_S, DUTY_UNKNOWN_S};
+        let heater = Line::Heater.mask();
+        // Compte les cycles chauffés sur une période, ISolar donné.
+        let duty = |isolar: Result<i16, HalError>| {
+            let (mut fw, mut hal) = booted();
+            hal.set(SensorId::TempBattA, Err(HalError::NotPowered));
+            hal.set(SensorId::TempBattB, Ok(i16::MAX));
+            hal.set(SensorId::ISolar, isolar);
+            let mut on = 0;
+            for _ in 0..DUTY_PERIOD_S {
+                fw.step(&mut hal);
+                assert!(!ram::TBATT_VALID.get(fw.ram_mut()));
+                on += hal.line_on(heater) as u32;
+            }
+            on
+        };
+        assert_eq!(duty(Ok(600)), 0, "soleil : coupé");
+        assert_eq!(duty(Ok(0)), DUTY_ECLIPSE_S, "éclipse : 50 %");
+        assert_eq!(duty(Err(HalError::Io)), DUTY_UNKNOWN_S, "inconnu : 33 %");
+        assert_eq!(duty(Ok(-500)), DUTY_UNKNOWN_S, "ISolar aberrant = inconnu");
     }
 
     #[test]
@@ -350,11 +466,12 @@ mod tests {
         // Le maintien V >= 7560 compte depuis l'entrée en Eco (1 cycle avant cette série),
         // même plafond bloquant : 60 s au total -> cycle 59 de la série.
         assert_eq!(first_in(&r, Mode::Nominal), Some(59));
-        // Opcodes hors périmètre T-005 : acceptés, acquittés Refused.
+        // `Reboot` (T-011) : acquitté Ok, reset demandé après l'ACK.
         hal.push_tc(8, &Command::Reboot);
         fw.step(&mut hal);
-        assert_eq!(hal.acks()[3].result, AckResult::Refused);
-        assert_eq!(hal.resets, 0);
+        fw.step(&mut hal);
+        assert_eq!(hal.acks()[3].result, AckResult::Ok);
+        assert_eq!(hal.resets, 1);
     }
 
     fn rejected(fw: &mut Firmware) -> u16 {
@@ -507,6 +624,7 @@ mod tests {
         assert!(fw.step(&mut hal).kicked);
     }
 
+    #[cfg(not(feature = "unprotected"))]
     #[test]
     fn health_rewrites_altered_registers() {
         let (mut fw, mut hal) = booted();
@@ -624,6 +742,14 @@ mod tests {
                     let f: Vec<u8> = (0..len).map(|_| rng.next_u64() as u8).collect();
                     hal.rx.push_back(f);
                 }
+                fw.step(&mut hal);
+            }
+            // Capteurs de nouveau sains : une surintensité aléatoire persistante sur la Radio
+            // la fait légitimement couper par le FDIR (latch-up). La Radio doit revenir en au
+            // plus 3 échantillons + 5 s de coupure.
+            let hal_n = MockHal::nominal();
+            hal.sensors = hal_n.sensors;
+            for _ in 0..10 {
                 fw.step(&mut hal);
             }
             assert!(
