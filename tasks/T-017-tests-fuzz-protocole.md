@@ -17,3 +17,9 @@ seule (sans recopier `proto.rs`, CRC bit à bit sans table) ; test différentiel
 (type, SEQ, LEN, charge utile) → octets identiques à ceux de `firmware::proto`, et les trois vecteurs de l'annexe
 de `docs/risks.md` retrouvés par les deux. Un écart = test laissé rouge + trame en cause dans le compte rendu.
 ## Compte rendu (rempli par l'agent)
+Fait (tester, Haiku ; compte rendu reporté par le manager car l'agent n'écrivait que dans */tests/).
+- Fichiers : firmware/tests/fuzz_proto.rs (cas 1, 1b, 2, 3, 4, 6), ground/tests/fuzz_ground.rs (cas 5a, 5b, 5c). Aucun src/ touché.
+- 5 601 219 entrées fuzzées + 100 000 trames en différentiel ; 0 divergence, 0 accepté à tort, 0 collision CRC (1 à 8 bits, 200 000 essais par k).
+- Encodeur de référence écrit depuis SPEC §5 seule ; 3/3 vecteurs dorés retrouvés par référence et proto.
+- Graine : AEGIS_FUZZ_SEED (défaut 0x00AE_6100_0000_0017), affichée sur chaque ligne `cas=…`, rejeu vérifié.
+- `cargo test --release -p firmware --test fuzz_proto` vert ; `cargo test --release -p ground --test fuzz_ground` vert ; ci.sh → CI OK (vérifié par le manager).
