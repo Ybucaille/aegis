@@ -17,3 +17,14 @@ Ajout PRE-MORTEM (R1, R3) : (d) grille de coins déterministe, en plus des 20 gr
 assertion : mode final `Nominal` pour les 24. C'est LE contrôle du « 100 % `OK_NOMINAL` » du témoin : un coin
 rouge se rapporte tel quel (pas de retouche de seuil), et le jour 2 ne démarre pas avant décision du manager.
 ## Compte rendu (rempli par l'agent)
+
+Agent builder/tester (Haiku), 2026-11-14. Pas de commit. Fichiers écrits : `sim/tests/gate_day1.rs` et ce compte rendu.
+Fait : (a) 20 graines (config par défaut), mêmes critères que `nominal_flight_seed1` + mode Nominal et Payload alimentée à T_RUN ;
+(b) énergie : graines 1..=20 avec SoC initial 80 %, fenêtre = première orbite (5700 s), phase par défaut ; thermostat : T_batt min >= 0 °C sur les
+vols (a) ; (c) déterminisme graine 1 deux fois ; (d) grille 3 SoC x 8 phases, graine 1. Échecs collectés, sortie complète, rien retouché.
+Commandes : `./scripts/ci.sh` -> `CI OK` ; `cargo test -p sim --test gate_day1 -- --nocapture` -> `test result: ok. 1 passed; 0 failed`, 12,4 s.
+Sortie : 20 lignes `seed=N resets=0 mode=Nominal` (seeds 1..20, toutes OK) ; 24 lignes `coin soc=.. phase=..` toutes `mode_final=Some(Nominal)`
+(balises_derniere_passe=60, acks_derniere_passe=10 pour les 24) ; calibration seeds 1..20 : bilan +0,395 à +0,467 Wh, SoC fin 83,95 à 84,67 % (départ 80 %), mode fin Nominal ;
+déterminisme seed 1 : identique=true ; `GATE J1 : 0 échec`.
+Écarts : (1) la calibration (b) utilise la phase tirée par la graine (aucune phase imposée) et la première orbite du run ; (2) la dernière passe
+des coins = dernière passe entièrement contenue dans le run ; (3) le test ne vérifie pas le « +balise à chaque passe » des coins, seulement la passe finale.
