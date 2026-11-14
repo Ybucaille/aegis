@@ -5,6 +5,25 @@ use crate::world::{GroundSummary, Snapshot};
 use firmware::proto::Beacon;
 use firmware::{Mode, ResetCause};
 
+/// Ce qu'une injection a réellement touché (SPEC §7, T-014).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InjectionRecord {
+    /// Étiquette de classe (`F1`..`D1`), nom de la variante et paramètres (texte stable).
+    pub class: &'static str,
+    pub fault: &'static str,
+    pub params: String,
+    /// Graine du run (loguée avec chaque injection).
+    pub seed: u64,
+    /// Date de l'injection demandée.
+    pub t_inj: u32,
+    /// Date de l'effet réel (None : jamais appliquée, p. ex. aucune trame après `t_inj`).
+    pub applied_t: Option<u32>,
+    /// Région, bit, ligne... réellement touchés.
+    pub touched: String,
+    pub frame_before: Option<Vec<u8>>,
+    pub frame_after: Option<Vec<u8>>,
+}
+
 /// Résultat d'un run : métriques brutes + verdict de l'oracle.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RunResult {
@@ -39,6 +58,8 @@ pub struct RunResult {
     pub last_beacon: Option<Beacon>,
     /// Région RAM touchée par la panne (renseignée par l'injecteur).
     pub ram_region: Option<String>,
+    /// Injections réellement effectuées, dans l'ordre.
+    pub injections: Vec<InjectionRecord>,
 }
 
 impl RunResult {

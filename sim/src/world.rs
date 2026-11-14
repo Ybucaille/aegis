@@ -1,9 +1,10 @@
 //! Monde simulé : physique + matériel + firmware réel. Séquence d'un tick : SPEC §3.1.
 //! Le sol (`ground::Ground`, politique Auto) est branché sur le canal radio (étapes 5 et 6).
 
-use crate::hw::Hw;
+use crate::fault::{flip_frame_bits, truncate_frame, Fault, StuckKind, OBC_CUT_S, SEL_CLEAR_OFF_S};
+use crate::hw::{Hw, SensorFault};
 use crate::metrics;
-pub use crate::metrics::RunResult;
+pub use crate::metrics::{InjectionRecord, RunResult};
 use crate::oracle::{EndState, Oracle, TickObs, Truth};
 use crate::orbit::Orbit;
 use crate::params::Params;
@@ -22,11 +23,8 @@ pub const BOOT_DELAY: u32 = 5;
 /// Température initiale du nœud batterie (°C). Choix du simulateur, indépendant de la graine.
 pub const TEMP_INIT_C: f64 = 10.0;
 
-/// Panne à injecter. Placeholder : les vraies pannes arrivent en T-014 ; `faults` est ignoré ici.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Fault {
-    Placeholder,
-}
+/// Vrai si le binaire est compilé avec les protections du firmware (pas de feature `unprotected`).
+pub const PROTECTED_BUILD: bool = cfg!(not(feature = "unprotected"));
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FaultEvent {
@@ -40,8 +38,25 @@ pub struct SimConfig {
     pub duration_s: u32,
     pub faults: Vec<FaultEvent>,
     pub params: Params,
-    /// Non exploité en T-006 (le firmware n'a pas encore de feature `unprotected`).
+    /// Doit correspondre au binaire compilé (`PROTECTED_BUILD`) : `World::try_new` refuse sinon.
     pub protections: bool,
+}
+
+impl SimConfig {
+    /// Erreur explicite si la configuration demande autre chose que ce que le binaire contient.
+    pub fn check_protections(&self) -> Result<(), String> {
+        if self.protections == PROTECTED_BUILD {
+            Ok(())
+        } else {
+            Err(format!(
+                "SimConfig.protections={} mais le binaire est compilé {} (feature cargo `unprotected` \
+                 = {}) : recompiler avec/sans `--features sim/unprotected`, pas de bascule silencieuse",
+                self.protections,
+                if PROTECTED_BUILD { "AVEC protections" } else { "SANS protections" },
+                !PROTECTED_BUILD
+            ))
+        }
+    }
 }
 
 impl Default for SimConfig {
@@ -52,7 +67,7 @@ impl Default for SimConfig {
             duration_s: params.t_run_s,
             faults: Vec::new(),
             params,
-            protections: true,
+            protections: PROTECTED_BUILD,
         }
     }
 }
@@ -150,12 +165,52 @@ pub struct World {
     oracle: Oracle,
     truth: Truth,
     ram_region: Option<String>,
-    #[cfg(test)]
     fw_disabled: bool,
+    /// Pannes du run triées par date (copie de `cfg.faults`), et index de la prochaine à appliquer.
+    fault_events: Vec<FaultEvent>,
+    next_fault: usize,
+    inj: Injector,
+    injections: Vec<InjectionRecord>,
+}
+
+/// Latch-up actif sur une ligne.
+#[derive(Clone, Copy, Debug)]
+struct Sel {
+    extra_ma: u16,
+    /// Ticks cumulés ligne alimentée avec la surintensité (ne se remet à zéro qu'à l'effacement).
+    on_ticks: u32,
+    /// Ticks consécutifs ligne coupée.
+    off_ticks: u32,
+    rec: usize,
+}
+
+/// État d'injection : pannes latentes ou en attente d'une trame.
+#[derive(Debug, Default)]
+struct Injector {
+    sel: [Option<Sel>; 3],
+    /// Latch-up tiré mais ligne pas encore alimentée : (ligne, surintensité, enregistrement).
+    pending_sel: Vec<(Line, u16, usize)>,
+    pending_up: Option<(Fault, usize)>,
+    pending_down: Option<(Vec<u32>, usize)>,
+    /// Trames montantes émises par le sol (source des rejeux).
+    up_history: Vec<Vec<u8>>,
+    /// Ticks restants de coupure OBC (F13).
+    obc_cut: u32,
 }
 
 impl World {
+    /// Comme `try_new`, mais panique si la configuration contredit le binaire.
     pub fn new(cfg: SimConfig) -> World {
+        World::try_new(cfg).unwrap_or_else(|e| panic!("{e}"))
+    }
+
+    /// Crée le monde ; erreur explicite si `cfg.protections` diverge du binaire compilé.
+    pub fn try_new(cfg: SimConfig) -> Result<World, String> {
+        cfg.check_protections()?;
+        Ok(World::build(cfg))
+    }
+
+    fn build(cfg: SimConfig) -> World {
         let mut rng = Rng::new(cfg.seed);
         let soc = cfg.params.draw_soc_init(&mut rng);
         let phase = cfg.params.draw_phase_init(&mut rng);
@@ -171,6 +226,7 @@ impl World {
         let min_soc = power.soc_pct();
         let oracle = Oracle::new(&cfg.params);
         let cfg_soc_off = cfg.params.soc_off_pct;
+        let cfg_faults = cfg.faults.clone();
         World {
             cfg,
             fw,
@@ -205,8 +261,15 @@ impl World {
             oracle,
             truth: Truth::default(),
             ram_region: None,
-            #[cfg(test)]
             fw_disabled: false,
+            fault_events: {
+                let mut v = cfg_faults;
+                v.sort_by_key(|e| e.t);
+                v
+            },
+            next_fault: 0,
+            inj: Injector::default(),
+            injections: Vec::new(),
         }
     }
 
@@ -228,6 +291,27 @@ impl World {
     /// Mémorise la région RAM touchée par la panne (métrique §8.2).
     pub fn note_ram_region(&mut self, region: &str) {
         self.ram_region = Some(region.to_string());
+    }
+
+    /// Vérité physique en lecture (lignes détruites...).
+    pub fn truth(&self) -> &Truth {
+        &self.truth
+    }
+
+    /// Enregistrements des injections effectivement tirées dans le run (ordre d'application).
+    pub fn injections(&self) -> &[InjectionRecord] {
+        &self.injections
+    }
+
+    /// Surintensité (mA) d'un latch-up actif sur la ligne, s'il y en a un.
+    pub fn sel_extra_ma(&self, l: Line) -> Option<u16> {
+        self.inj.sel[l as usize].map(|s| s.extra_ma)
+    }
+
+    /// Banc d'essai : coupe (`false`) le firmware, le watchdog n'étant alors plus exercé. Sert aux
+    /// tests d'effet physique (la mesure ne doit pas dépendre de la réaction du firmware).
+    pub fn set_firmware_enabled(&mut self, on: bool) {
+        self.fw_disabled = !on;
     }
 
     #[cfg(test)]
@@ -325,9 +409,11 @@ impl World {
         let v = self.power.voltage_mv();
         let t_c = self.thermal.temp_c();
         let sw = self.hw.reg(Reg::LoadSwitches);
+        let destroyed = self.truth.destroyed_lines;
+        let sel = self.inj.sel;
         let line_ma = |line: Line, w: f64| -> f64 {
-            if sw & line.mask() != 0 {
-                w / v * 1_000_000.0
+            if sw & line.mask() != 0 && destroyed & (1 << (line as u8)) == 0 {
+                w / v * 1_000_000.0 + sel[line as usize].map_or(0.0, |s| s.extra_ma as f64)
             } else {
                 0.0
             }
@@ -371,6 +457,16 @@ impl World {
         let mut tx_this_tick = 0u32;
         self.oracle.begin_tick(self.t, self.orbit.phase(), in_pass);
 
+        // 1. pannes dues à ce tick, puis latch-up latents devenus actifs
+        while self.next_fault < self.fault_events.len()
+            && self.fault_events[self.next_fault].t <= self.t
+        {
+            let f = self.fault_events[self.next_fault].fault.clone();
+            self.next_fault += 1;
+            self.inject(&f);
+        }
+        self.sel_activate();
+
         // 2. capteurs (la physique est intégrée en fin de tick, une fois les charges connues)
         if self.power.obc_powered() {
             self.sample_sensors(in_eclipse);
@@ -378,10 +474,7 @@ impl World {
 
         // 3. firmware
         let mut report = None;
-        #[cfg(test)]
         let fw_on = !self.fw_disabled;
-        #[cfg(not(test))]
-        let fw_on = true;
         if fw_on && self.power.obc_powered() && self.cpu == Cpu::Running && !self.hung {
             let fw = &mut self.fw;
             let hw = &mut self.hw;
@@ -428,6 +521,7 @@ impl World {
             self.tx_frames += 1;
             self.oracle.on_down_emitted(&f);
             if in_pass {
+                let f = self.shape_downlink(f);
                 self.ground_receive(&f);
                 self.downlink.push_back(DownFrame {
                     t: self.t,
@@ -441,15 +535,25 @@ impl World {
         // 6. sol : opérateur automatique, une TC au plus par tick, seulement en passe
         if let Some((buf, n)) = self.ground.poll_tx(self.t, in_pass) {
             self.oracle.on_up_emitted(&buf[..n]);
-            self.hw.push_uplink(&buf[..n]);
+            for f in self.shape_uplink(&buf[..n]) {
+                self.hw.push_uplink(&f);
+            }
         }
         self.summary.tc_sent = self.ground.view().tc_sent;
 
         // physique : charges effectives (OBC alimenté, lignes selon LoadSwitches en vigueur)
-        let p = &self.cfg.params;
         let sw = self.hw.reg(Reg::LoadSwitches);
-        let on = |l: Line| sw & l.mask() != 0;
         let powered = self.power.obc_powered();
+        self.sel_tick(powered, sw);
+        let p = &self.cfg.params;
+        let destroyed = self.truth.destroyed_lines;
+        let on = |l: Line| sw & l.mask() != 0 && destroyed & (1 << (l as u8)) == 0;
+        let sel_w: f64 = Line::ALL
+            .iter()
+            .filter(|l| on(**l))
+            .filter_map(|l| self.inj.sel[*l as usize])
+            .map(|s| s.extra_ma as f64 * self.power.voltage_mv() / 1_000_000.0)
+            .sum();
         let mut load_w = p.obc_w;
         let mut heater_w = 0.0;
         if on(Line::Payload) {
@@ -465,10 +569,19 @@ impl World {
         if tx_power {
             load_w += p.tx_w;
         }
+        load_w += sel_w;
         let solar_w = if in_eclipse { 0.0 } else { p.solar_w };
         let tick_s = p.tick_s;
         let dt = tick_s as f64;
         let was_powered = powered;
+        if self.inj.obc_cut > 0 {
+            // Coupure du limiteur (F13) : rétablie ici, après la capture de `was_powered`, pour que
+            // le redémarrage à froid soit détecté comme une remise sous tension.
+            self.inj.obc_cut -= 1;
+            if self.inj.obc_cut == 0 {
+                self.power.set_forced_off(false);
+            }
+        }
         let drawn = self.power.step(solar_w, load_w, dt);
         let now_powered = self.power.obc_powered();
         self.thermal
@@ -534,6 +647,251 @@ impl World {
         self.t += 1;
         self.last_snapshot = Some(snap.clone());
         snap
+    }
+
+    // ----------------------------------------------------------------------------------------
+    // Injection de pannes (SPEC §7)
+    // ----------------------------------------------------------------------------------------
+
+    fn flip_ram_bit(&mut self, lin: usize) {
+        let ram = self.fw.ram_mut();
+        ram[lin / 8] ^= 1 << (lin % 8);
+    }
+
+    fn flip_reg(&mut self, r: Reg, bit: u8) -> String {
+        let before = self.hw.reg(r);
+        let after = before ^ (1 << bit);
+        self.hw.set_reg(r, after);
+        format!("reg={r:?} bit={bit} {before:#06x}->{after:#06x}")
+    }
+
+    /// Applique la panne maintenant (appelée au début du tick `t_inj`) et consigne ce qui a été
+    /// réellement touché dans `injections()`.
+    pub fn inject(&mut self, f: &Fault) {
+        let rec = self.injections.len();
+        self.injections.push(InjectionRecord {
+            class: f.class().label(),
+            fault: f.name(),
+            params: f.params_text(),
+            seed: self.cfg.seed,
+            t_inj: self.t,
+            applied_t: None,
+            touched: String::new(),
+            frame_before: None,
+            frame_after: None,
+        });
+        let t = self.t;
+        let mut touched: Option<String> = None;
+        match f {
+            Fault::RamSeu { byte, bit }
+            | Fault::FdirHit { byte, bit }
+            | Fault::SchedHit { byte, bit } => {
+                let lin = *byte as usize * 8 + *bit as usize;
+                self.flip_ram_bit(lin);
+                let name = firmware::region_of(*byte as usize).map_or("?", |r| r.name);
+                self.note_ram_region(name);
+                touched = Some(format!("ram byte={byte} bit={bit} region={name}"));
+            }
+            Fault::RamMbu { byte, bit, n } => {
+                let start = *byte as usize * 8 + *bit as usize;
+                for k in 0..*n as usize {
+                    self.flip_ram_bit(start + k);
+                }
+                let name = firmware::region_of(*byte as usize).map_or("?", |r| r.name);
+                self.note_ram_region(name);
+                touched = Some(format!("ram byte={byte} bit={bit} n={n} region={name}"));
+            }
+            Fault::RegSeu { reg, bit } | Fault::WdgRegHit { reg, bit } => {
+                touched = Some(self.flip_reg(*reg, *bit));
+            }
+            Fault::LatchUp { line, extra_ma } => {
+                self.inj.pending_sel.push((*line, *extra_ma, rec));
+                self.injections[rec].touched =
+                    format!("line={line:?} extra_ma={extra_ma} latent jusqu'à alimentation");
+            }
+            Fault::SensorStuck { sensor, kind } => {
+                let sf = match kind {
+                    StuckKind::Frozen => SensorFault::Frozen(self.hw.sensor_raw(*sensor)),
+                    StuckKind::Err => SensorFault::Err,
+                    StuckKind::OutOfRange(v) => SensorFault::Value(*v),
+                };
+                self.hw.set_sensor_fault(*sensor, Some(sf));
+                touched = Some(format!("sensor={sensor:?} {sf:?}"));
+            }
+            Fault::TcCorrupt { .. } | Fault::TcReplay { .. } | Fault::TcTruncate { .. } => {
+                self.inj.pending_up = Some((f.clone(), rec));
+                self.injections[rec].touched = "en attente de la prochaine trame montante".into();
+            }
+            Fault::TmCorrupt { bits } => {
+                self.inj.pending_down = Some((bits.clone(), rec));
+                self.injections[rec].touched =
+                    "en attente de la prochaine trame descendante reçue".into();
+            }
+            Fault::WdgSpurious => {
+                if self.power.obc_powered() && self.cpu != Cpu::Off {
+                    self.do_reset(ResetCause::Watchdog);
+                    touched = Some("reset watchdog intempestif".into());
+                } else {
+                    touched = Some("OBC hors tension : sans effet".into());
+                }
+            }
+            Fault::CpuHang => {
+                self.hung = true;
+                touched = Some("processeur figé jusqu'au prochain reset".into());
+            }
+            Fault::BattDeplete { soc_x10 } => {
+                let soc = *soc_x10 as f64 / 10.0;
+                self.power.set_soc_pct(soc);
+                touched = Some(format!("soc forcé à {soc:.1} %"));
+            }
+            Fault::NvmCorrupt { bits } => {
+                let nvm = self.hw.nvm_mut();
+                for b in bits {
+                    nvm[*b as usize / 8] ^= 1 << (*b % 8);
+                }
+                touched = Some(format!("nvm bits={bits:?}"));
+            }
+            Fault::ObcLatchUp => {
+                self.power.set_forced_off(true);
+                self.inj.obc_cut = OBC_CUT_S + 1; // +1 : le tick d'injection compte déjà
+                self.cpu = Cpu::Off;
+                self.hung = false;
+                touched = Some(format!("OBC coupé {OBC_CUT_S} s par le limiteur"));
+            }
+            Fault::WdgDead => {
+                self.hw.set_wdg_dead(true);
+                touched = Some("watchdog mort".into());
+            }
+        }
+        if let Some(txt) = touched {
+            let r = &mut self.injections[rec];
+            r.touched = txt;
+            r.applied_t = Some(t);
+        }
+    }
+
+    fn line_on(&self, l: Line) -> bool {
+        self.power.obc_powered()
+            && self.hw.reg(Reg::LoadSwitches) & l.mask() != 0
+            && !self.truth.is_destroyed(l)
+    }
+
+    /// Un latch-up latent devient actif dès que sa ligne est alimentée.
+    fn sel_activate(&mut self) {
+        let mut i = 0;
+        while i < self.inj.pending_sel.len() {
+            let (l, extra, rec) = self.inj.pending_sel[i];
+            if self.line_on(l) {
+                self.inj.pending_sel.remove(i);
+                self.inj.sel[l as usize] = Some(Sel {
+                    extra_ma: extra,
+                    on_ticks: 0,
+                    off_ticks: 0,
+                    rec,
+                });
+                let t = self.t;
+                let r = &mut self.injections[rec];
+                r.applied_t = Some(t);
+                r.touched = format!("line={l:?} extra_ma={extra} actif");
+            } else {
+                i += 1;
+            }
+        }
+    }
+
+    /// Chronomètres de latch-up : destruction à `T_SEL` de ligne alimentée cumulée, effacement
+    /// après `SEL_CLEAR_OFF_S` de coupure.
+    fn sel_tick(&mut self, powered: bool, sw: u16) {
+        let t_sel = self.cfg.params.t_sel_s;
+        for l in Line::ALL {
+            let i = l as usize;
+            let on = powered && sw & l.mask() != 0 && !self.truth.is_destroyed(l);
+            let Some(mut s) = self.inj.sel[i] else {
+                continue;
+            };
+            if on {
+                s.on_ticks += 1;
+                s.off_ticks = 0;
+                if s.on_ticks >= t_sel {
+                    self.truth.destroy_line(l);
+                    self.hw.set_line_dead(l);
+                    self.inj.sel[i] = None;
+                    let t = self.t;
+                    self.injections[s.rec]
+                        .touched
+                        .push_str(&format!(" ; ligne détruite t={t}"));
+                    continue;
+                }
+            } else {
+                s.off_ticks += 1;
+                if s.off_ticks >= SEL_CLEAR_OFF_S {
+                    self.inj.sel[i] = None;
+                    let t = self.t;
+                    self.injections[s.rec]
+                        .touched
+                        .push_str(&format!(" ; effacé t={t}"));
+                    continue;
+                }
+            }
+            self.inj.sel[i] = Some(s);
+        }
+    }
+
+    /// Canal montant : applique la panne de trame en attente et mémorise la trame émise.
+    fn shape_uplink(&mut self, orig: &[u8]) -> Vec<Vec<u8>> {
+        let mut out = vec![orig.to_vec()];
+        if let Some((fault, rec)) = self.inj.pending_up.take() {
+            let t = self.t;
+            let r = &mut self.injections[rec];
+            r.applied_t = Some(t);
+            r.frame_before = Some(orig.to_vec());
+            match fault {
+                Fault::TcCorrupt { bits } => {
+                    let (g, pos) = flip_frame_bits(orig, &bits);
+                    r.touched = format!("bits={pos:?} sur {} bits", orig.len() * 8);
+                    r.frame_after = Some(g.clone());
+                    out = vec![g];
+                }
+                Fault::TcTruncate { frac } => {
+                    let g = truncate_frame(orig, frac);
+                    r.touched = format!("trame tronquée {} -> {} octets", orig.len(), g.len());
+                    r.frame_after = Some(g.clone());
+                    out = vec![g];
+                }
+                Fault::TcReplay { pick } => {
+                    let h = &self.inj.up_history;
+                    let old = if h.is_empty() {
+                        orig.to_vec()
+                    } else {
+                        h[pick as usize % h.len()].clone()
+                    };
+                    r.touched = format!("rejeu d'une trame de {} octets", old.len());
+                    r.frame_before = Some(old.clone());
+                    r.frame_after = Some(old.clone());
+                    out.push(old);
+                }
+                _ => {}
+            }
+        }
+        if self.inj.up_history.len() < 64 {
+            self.inj.up_history.push(orig.to_vec());
+        }
+        out
+    }
+
+    /// Canal descendant : altère la première trame reçue par le sol après `t_inj` (F12).
+    fn shape_downlink(&mut self, f: Vec<u8>) -> Vec<u8> {
+        let Some((bits, rec)) = self.inj.pending_down.take() else {
+            return f;
+        };
+        let (g, pos) = flip_frame_bits(&f, &bits);
+        let t = self.t;
+        let r = &mut self.injections[rec];
+        r.applied_t = Some(t);
+        r.touched = format!("bits={pos:?} sur {} bits", f.len() * 8);
+        r.frame_before = Some(f);
+        r.frame_after = Some(g.clone());
+        g
     }
 
     /// Ligne réellement alimentée : interrupteur en vigueur, OBC alimenté, ligne non détruite.
@@ -615,6 +973,7 @@ impl World {
             delay_to_nominal_s,
             last_beacon,
             ram_region: self.ram_region,
+            injections: self.injections,
         }
     }
 }

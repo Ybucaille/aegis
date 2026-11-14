@@ -22,6 +22,17 @@ pub const WDG_CTRL_ENABLE: u16 = 0x0001;
 pub const RADIO_CFG_RX: u16 = 0x0001;
 pub const RADIO_CFG_TX: u16 = 0x0002;
 
+/// Défaut d'un capteur (F5) : le matériel renvoie autre chose que la mesure.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SensorFault {
+    /// Figé à une valeur (permanent).
+    Frozen(i16),
+    /// La lecture échoue (`HalError::Io`).
+    Err,
+    /// Valeur hors plage renvoyée à la place de la mesure.
+    Value(i16),
+}
+
 #[derive(Clone, Debug)]
 pub struct Hw {
     regs: [u16; 4],
@@ -38,6 +49,11 @@ pub struct Hw {
     rx_delivered: u32,
     /// Trames montantes réellement remises au firmware (instrument de l'oracle S5, vidé par `World`).
     delivered: Vec<Vec<u8>>,
+    /// Watchdog mort (D1) : ne décompte plus, n'expire jamais. Matériel : survit aux resets.
+    wdg_dead: bool,
+    sensor_faults: [Option<SensorFault>; 9],
+    /// Bit `Line as u8` : ligne détruite (circuit ouvert, ne rend plus aucun service).
+    dead_lines: u8,
 }
 
 impl Default for Hw {
@@ -63,6 +79,9 @@ impl Hw {
             nvm_writes: 0,
             rx_delivered: 0,
             delivered: Vec::new(),
+            wdg_dead: false,
+            sensor_faults: [None; 9],
+            dead_lines: 0,
         };
         hw.hw_reset(ResetCause::PowerOn);
         hw
@@ -86,11 +105,51 @@ impl Hw {
     /// Un tick de watchdog ; `true` si le compteur atteint 0 (expiration).
     /// Watchdog désactivé (bit 0 de `WdgCtrl` à 0) : le compteur est gelé, jamais d'expiration.
     pub fn wdg_tick(&mut self) -> bool {
+        if self.wdg_dead {
+            return false;
+        }
         if self.regs[Reg::WdgCtrl as usize] & WDG_CTRL_ENABLE == 0 {
             return false;
         }
         self.wdg_counter = self.wdg_counter.saturating_sub(1);
         self.wdg_counter == 0
+    }
+
+    /// Tue le watchdog (D1) : plus aucune expiration, y compris après un reset.
+    pub fn set_wdg_dead(&mut self, dead: bool) {
+        self.wdg_dead = dead;
+    }
+
+    pub fn wdg_dead(&self) -> bool {
+        self.wdg_dead
+    }
+
+    /// Défaut capteur permanent (F5).
+    pub fn set_sensor_fault(&mut self, id: SensorId, f: Option<SensorFault>) {
+        self.sensor_faults[id as usize] = f;
+    }
+
+    pub fn sensor_fault(&self, id: SensorId) -> Option<SensorFault> {
+        self.sensor_faults[id as usize]
+    }
+
+    /// Dernière mesure vraie poussée par `World` (hors défaut capteur).
+    pub fn sensor_raw(&self, id: SensorId) -> i16 {
+        self.sensors[id as usize]
+    }
+
+    /// Détruit une ligne (latch-up non coupé) : elle ne rend plus de service, définitivement.
+    pub fn set_line_dead(&mut self, l: firmware::Line) {
+        self.dead_lines |= 1 << (l as u8);
+    }
+
+    pub fn line_dead(&self, l: firmware::Line) -> bool {
+        self.dead_lines & (1 << (l as u8)) != 0
+    }
+
+    /// Première trame montante en attente (instrument de test).
+    pub fn uplink_peek(&self) -> Option<&[u8]> {
+        self.uplink.front().map(|v| v.as_slice())
     }
 
     pub fn wdg_counter(&self) -> u32 {
@@ -169,13 +228,17 @@ impl Hw {
     }
 
     fn line_powered(&self, line: firmware::Line) -> bool {
-        self.regs[Reg::LoadSwitches as usize] & line.mask() != 0
+        self.regs[Reg::LoadSwitches as usize] & line.mask() != 0 && !self.line_dead(line)
     }
 }
 
 impl Hal for Hw {
     fn sensor(&mut self, id: SensorId) -> Result<i16, HalError> {
-        Ok(self.sensors[id as usize])
+        match self.sensor_faults[id as usize] {
+            None => Ok(self.sensors[id as usize]),
+            Some(SensorFault::Frozen(v)) | Some(SensorFault::Value(v)) => Ok(v),
+            Some(SensorFault::Err) => Err(HalError::Io),
+        }
     }
 
     fn reg_read(&mut self, r: Reg) -> u16 {

@@ -6,7 +6,10 @@ use crate::params::Params;
 pub struct Power {
     energy_wh: f64,
     cap_wh: f64,
+    /// Alimentation OBC selon l'état de charge (hystérésis).
     obc_powered: bool,
+    /// Coupure forcée de l'OBC par le limiteur matériel (F13), indépendante de la charge.
+    forced_off: bool,
     soc_off: f64,
     soc_on: f64,
     v_base: f64,
@@ -20,6 +23,7 @@ impl Power {
             energy_wh: p.batt_wh * soc / 100.0,
             cap_wh: p.batt_wh,
             obc_powered: soc >= p.soc_off_pct,
+            forced_off: false,
             soc_off: p.soc_off_pct,
             soc_on: p.soc_on_pct,
             v_base: p.v_base_mv,
@@ -31,9 +35,8 @@ impl Power {
         100.0 * self.energy_wh / self.cap_wh
     }
 
-    /// Force l'état de charge (tests de l'oracle).
-    #[cfg(test)]
-    pub(crate) fn set_soc_pct(&mut self, soc: f64) {
+    /// Force l'état de charge (injection F10, tests de l'oracle).
+    pub fn set_soc_pct(&mut self, soc: f64) {
         self.energy_wh = self.cap_wh * soc.clamp(0.0, 100.0) / 100.0;
     }
 
@@ -43,14 +46,19 @@ impl Power {
 
     /// OBC alimenté ? Faux sous `SOC_OFF`, redevient vrai au-dessus de `SOC_ON`.
     pub fn obc_powered(&self) -> bool {
-        self.obc_powered
+        self.obc_powered && !self.forced_off
+    }
+
+    /// Coupure (ou rétablissement) de l'OBC par le limiteur de courant matériel (F13).
+    pub fn set_forced_off(&mut self, off: bool) {
+        self.forced_off = off;
     }
 
     /// Intègre un tick. `solar_w` : production ; `loads_w` : somme des charges demandées.
     /// OBC coupé : les charges sont nulles (tout est derrière l'OBC / la coupure), le solaire charge.
     /// Renvoie la puissance de charge effectivement consommée (W).
     pub fn step(&mut self, solar_w: f64, loads_w: f64, dt_s: f64) -> f64 {
-        let load = if self.obc_powered { loads_w } else { 0.0 };
+        let load = if self.obc_powered() { loads_w } else { 0.0 };
         self.energy_wh += (solar_w - load) * dt_s / 3600.0;
         self.energy_wh = self.energy_wh.clamp(0.0, self.cap_wh);
         let soc = self.soc_pct();

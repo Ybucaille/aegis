@@ -6,3 +6,8 @@ edition.workspace = true
 [dependencies]
 firmware = { path = "../firmware" }
 ground = { path = "../ground" }
+
+[features]
+# Témoin sans protections. À câbler en `unprotected = ["firmware/unprotected"]` quand T-010 aura
+# ajouté la feature côté firmware (cargo refuse une feature de dépendance inexistante).
+unprotected = []
