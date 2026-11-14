@@ -16,3 +16,19 @@ thermostat idéal (ON < +2 °C, OFF > +8 °C) sur une éclipse → rapport cycli
 d'une orbite en charges nominales (1,8 W + balise 3 W x 1 s / 10 s + réchauffeur selon thermostat) affiché en Wh.
 Si le bilan est négatif : ne rien régler, le dire en première ligne du compte rendu (décision d'annexe A = manager).
 ## Compte rendu (rempli par l'agent)
+**Bilan : positif (aucun réglage d'annexe A nécessaire).**
+Fait : `sim/src/{prng,params,orbit,power,thermal,sensors}.rs` + `lib.rs` (déclare les 6 modules ; `world`/`hw` à ajouter par T-004).
+Commandes (résultats réels) :
+- `cargo fmt --all -- --check` -> OK
+- `cargo clippy -p sim --all-targets -- -D warnings` -> OK
+- `cargo test -p sim -- --nocapture` -> 15 passed, 0 failed
+Mesures : sans réchauffeur, -10 °C franchi après 1253 s d'éclipse (< 1500) ; réchauffeur permanent T min 15,1 °C ;
+thermostat idéal : rapport cyclique 32,9 % en éclipse, 12,1 % sur l'orbite, T min 2,0 °C ;
+bilan orbite nominale (OBC+RX+payload 1,8 W + balise 3 W x 1 s/10 s + réchauffeur) : produit 4,00 Wh, consommé 3,61 Wh, net +0,39 Wh.
+Vecteur xoshiro256** (graine 42) figé, recalculé indépendamment en Python ; splitmix64(0)=0xE220A8397B1DCDAF.
+Choix hors annexe A (à consigner dans decisions.md) : thermique tau = 1000 s, R = 40 K/W, T_env soleil +15 °C / éclipse -20 °C ;
+passe sol à phase 1500..2100 de l'orbite (en plein soleil, éclipse = fin d'orbite [3600, 5700)) ; gaussienne = somme de 12
+uniformes (queues tronquées à ±6 sigma, donc pas d'événements extrêmes de capteur : léger biais favorable, assumé).
+Écarts / biais : le test "sans réchauffeur" part de l'équilibre soleil (+15 °C) ; la charge OBC coupée met toutes les charges à 0
+(le réchauffeur est donc aussi coupé sous SOC_OFF : T_batt peut alors descendre, réaliste mais à surveiller en campagne).
+Pas de commit.

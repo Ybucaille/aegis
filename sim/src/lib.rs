@@ -1,8 +1,7 @@
-//! Simulateur d'environnement Aegis.
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn trivial() {
-        assert_eq!(1 + 1, 2);
-    }
-}
+//! Simulateur d'environnement Aegis (modules physiques purs ; `world`/`hw` ajoutés par T-004).
+pub mod orbit;
+pub mod params;
+pub mod power;
+pub mod prng;
+pub mod sensors;
+pub mod thermal;
