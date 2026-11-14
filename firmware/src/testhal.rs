@@ -16,6 +16,7 @@ use crate::hal::{Hal, HalError, Reg, ResetCause, SensorId, MAX_FRAME, NVM_SIZE};
 use crate::proto::{self, Ack, Beacon, Command, FrameType};
 
 /// PRNG de test (xorshift64*), graine non nulle.
+#[derive(Clone)]
 pub struct TestRng(u64);
 
 impl TestRng {
@@ -40,6 +41,7 @@ impl TestRng {
     }
 }
 
+#[derive(Clone)]
 pub struct MockHal {
     /// Valeur renvoyée par chaque capteur (index = `SensorId as usize`).
     pub sensors: [Result<i16, HalError>; 9],

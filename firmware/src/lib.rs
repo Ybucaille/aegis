@@ -5,18 +5,24 @@
 //!
 //! Organisation : `ram` (cellules et carte mémoire), `sched` (exécutif cyclique, watchdog),
 //! `mode` (machine de modes, lignes), `tasks` (une tâche par fichier), `proto`, `hal`.
-//! État T-005 : TMR/ECC (T-010), NVM et TC complètes (T-011), FDIR (T-012) restent à faire.
+//! Protections (T-010) : `tmr` (vote bit à bit), `ecc` (SECDED (13,8) entrelacé), tâche
+//! `scrub`. Feature `unprotected` : vote et ECC neutralisés (un point dans `tmr` et `ecc`).
+//! Restent à faire : NVM et TC complètes (T-011), FDIR (T-012).
 #![no_std]
 #![forbid(unsafe_code)]
 
+pub mod ecc;
 pub mod hal;
 pub mod mode;
+#[cfg(all(test, not(feature = "unprotected")))]
+mod protection_tests;
 pub mod proto;
 pub mod ram;
 pub mod sched;
 pub mod tasks;
 #[cfg(test)]
 mod testhal;
+pub mod tmr;
 
 pub use ram::{region_of, Region, RegionKind, RAM_MAP};
 

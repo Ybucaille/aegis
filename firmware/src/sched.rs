@@ -167,20 +167,20 @@ mod tests {
         assert_eq!(ram::RESET_CAUSE.get(ram), crate::ResetCause::Watchdog as u8);
         assert_eq!(ram::UPTIME.get(ram), 0);
         assert_eq!(ram::LAST_TC_SEQ.get(ram), 0);
-        // Hors des cellules initialisées, tout est à zéro.
-        let init = [
-            ram::RESET_CAUSE.off(),
-            ram::MODE.off(),
-            ram::CEILING.off(),
-            ram::WDG_KEY.off(),
-            ram::BEACON_ELAPSED.off(),
-            ram::BEACON_ELAPSED.off() + 1,
-        ];
-        for (i, &b) in ram.iter().enumerate() {
-            if !init.contains(&i) {
-                assert_eq!(b, 0, "octet {i} non effacé");
-            }
-        }
+        // Effacement complet : même image qu'un boot depuis une RAM à zéro.
+        let mut fw0 = Firmware::new();
+        let mut hal0 = MockHal::nominal();
+        hal0.reset_cause = crate::ResetCause::Watchdog;
+        fw0.boot(&mut hal0);
+        assert_eq!(ram[..], fw0.ram_mut()[..]);
+        // Hors des cellules initialisées (toutes leurs copies / voies), tout est à zéro.
+        let mut zero = [0u8; RAM_SIZE];
+        ram::RESET_CAUSE.set(&mut zero, crate::ResetCause::Watchdog as u8);
+        ram::MODE.set(&mut zero, Mode::Survie as u8);
+        ram::CEILING.set(&mut zero, Mode::Nominal as u8);
+        ram::WDG_KEY.set(&mut zero, WDG_KEY_A);
+        ram::BEACON_ELAPSED.set(&mut zero, u16::MAX);
+        assert_eq!(ram[..], zero[..]);
     }
 
     #[test]
@@ -641,15 +641,27 @@ mod tests {
         }
     }
 
-    /// Chaque bit de chaque cellule basculé une fois en régime nominal : le firmware ne panique
-    /// pas, garde la radio, et continue d'émettre des balises (vivant et visible).
+    /// Chaque bit de chaque cellule (copie 0 en TMR, bits de données en SECDED) basculé une
+    /// fois en régime nominal : le firmware ne panique pas, garde la radio, et continue
+    /// d'émettre des balises (vivant et visible). Vaut aussi pour le témoin `unprotected`.
     #[test]
     fn every_slot_bit_flip_keeps_radio_and_beacons() {
+        let (mut fw0, mut hal0) = booted();
+        run(&mut fw0, &mut hal0, 200);
         for s in ram::SLOTS {
             for bit in 0..s.len * 8 {
-                let (mut fw, mut hal) = booted();
-                run(&mut fw, &mut hal, 200);
-                fw.ram_mut()[s.start + bit / 8] ^= 1 << (bit % 8);
+                let (byte, b) = match s.prot {
+                    ram::Prot::Ecc(e) => {
+                        // Bit de données `bit % 8` de l'octet `bit / 8` : position de Hamming.
+                        const DATA_POS: [usize; 8] = [3, 5, 6, 7, 9, 10, 11, 12];
+                        e.phys_bit(s.start + bit / 8, DATA_POS[bit % 8])
+                    }
+                    _ => (s.start + bit / 8, (bit % 8) as u8),
+                };
+                let mut fw = Firmware::new();
+                *fw.ram_mut() = *fw0.ram_mut();
+                let mut hal = hal0.clone();
+                fw.ram_mut()[byte] ^= 1 << b;
                 let before = hal.beacons().len();
                 run(&mut fw, &mut hal, 120);
                 assert!(hal.line_on(Line::Radio.mask()), "{} bit {bit}", s.name);

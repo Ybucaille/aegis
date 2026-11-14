@@ -53,8 +53,8 @@ pub fn beacon<H: Hal>(ram: &mut Ram, hal: &mut H) -> Beacon {
         fdir_flags: ram::FDIR_FLAGS.get(ram),
         sensor_fault_mask: ram::SENSOR_FAULT_MASK.get(ram),
         line_state: (hal.reg_read(Reg::LoadSwitches) & 0xFF) as u8,
-        cnt_ecc_corr: 0,
-        cnt_tmr_fix: 0,
+        cnt_ecc_corr: ram::CNT_ECC_CORR.get(ram),
+        cnt_tmr_fix: ram::CNT_TMR_FIX.get(ram),
         cnt_tc_rejected: ram::CNT_TC_REJECTED.get(ram),
         cnt_latchup: ram::CNT_LATCHUP.get(ram),
     }

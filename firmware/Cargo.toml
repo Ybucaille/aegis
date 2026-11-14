@@ -5,3 +5,7 @@ edition.workspace = true
 
 [dependencies]
 
+
+[features]
+# Témoin sans protections (SPEC §8.3 règle 2) : vote TMR et SECDED neutralisés.
+unprotected = []
