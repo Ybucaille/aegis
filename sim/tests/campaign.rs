@@ -57,3 +57,36 @@ fn summary_has_region_breakdown_and_no_e0() {
         .iter()
         .all(|r| r.applied.is_none() && r.t_inj.is_none()));
 }
+
+#[test]
+fn csv_has_beacon_counter_columns() {
+    let csv = campaign::csv(&campaign::run_campaign(&opts(2)));
+    let mut lines = csv.lines();
+    let header: Vec<&str> = lines.next().unwrap().split(',').collect();
+    let first = header.iter().position(|c| *c == "cnt_ecc_corr").unwrap();
+    let names = [
+        "cnt_ecc_corr",
+        "cnt_tmr_fix",
+        "cnt_tc_rejected",
+        "cnt_latchup",
+        "fdir_flags",
+        "sensor_fault_mask",
+        "line_state",
+    ];
+    assert_eq!(&header[first..first + 7], &names);
+    assert_eq!(header[first - 1], "last_mode");
+    assert_eq!(header[first + 7], "harness_msg");
+    // Les champs `params` peuvent contenir des guillemets : on compte depuis la fin.
+    let mut with_beacon = 0;
+    for l in lines {
+        let f: Vec<&str> = l.rsplitn(9, ',').collect();
+        // f[0]=harness_msg, f[1..=7]=compteurs (ordre inversé), f[8]=reste
+        let cnt: Vec<&str> = f[1..=7].to_vec();
+        let empty = cnt.iter().filter(|c| c.is_empty()).count();
+        assert!(empty == 0 || empty == 7, "ligne incohérente : {l}");
+        if empty == 0 {
+            with_beacon += 1;
+        }
+    }
+    assert!(with_beacon > 0);
+}

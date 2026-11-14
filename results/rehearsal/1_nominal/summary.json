@@ -1,7 +1,7 @@
 {
   "variante": "protected",
   "graine_campagne": 42,
-  "git": "3c18c40-dirty",
+  "git": "36c10f0-dirty",
   "options": {
     "seed": 42,
     "runs": 1000,
@@ -142,7 +142,7 @@
     }
   },
   "debit": {
-    "duree_s": 13.691648262,
-    "runs_par_s": 73.03722538471972
+    "duree_s": 14.651849437,
+    "runs_par_s": 68.25076959054203
   }
 }

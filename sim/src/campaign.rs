@@ -55,6 +55,9 @@ pub struct Row {
     pub temp_max: f64,
     pub boot_count: u32,
     pub last_mode: Option<u8>,
+    /// Compteurs de la dernière balise (SPEC §8.2) : ecc_corr, tmr_fix, tc_rejected, latchup,
+    /// fdir_flags, sensor_fault_mask, line_state. `None` : aucune balise reçue.
+    pub beacon_cnt: Option<[u32; 7]>,
 }
 
 /// Classe du run `i`.
@@ -144,6 +147,7 @@ fn harness_row(run_id: u64, seed: u64, class: FaultClass, msg: String) -> Row {
         temp_max: f64::NAN,
         boot_count: 0,
         last_mode: None,
+        beacon_cnt: None,
     }
 }
 
@@ -189,6 +193,17 @@ fn row_of(run_id: u64, seed: u64, class: FaultClass, r: &RunResult) -> Row {
         temp_max: r.temp_max_c,
         boot_count: r.boot_count,
         last_mode: r.last_beacon.as_ref().map(|b| b.mode),
+        beacon_cnt: r.last_beacon.as_ref().map(|b| {
+            [
+                u32::from(b.cnt_ecc_corr),
+                u32::from(b.cnt_tmr_fix),
+                u32::from(b.cnt_tc_rejected),
+                u32::from(b.cnt_latchup),
+                u32::from(b.fdir_flags),
+                u32::from(b.sensor_fault_mask),
+                u32::from(b.line_state),
+            ]
+        }),
     }
 }
 
@@ -222,7 +237,7 @@ pub fn run_campaign(opts: &Options) -> Vec<Row> {
 // runs.csv
 // ---------------------------------------------------------------------------------------------
 
-pub const CSV_HEADER: &str = "run_id,seed,class,fault,params,t_inj,applied,region,region_kind,verdict,categories,survived,nominal,criteria,resets_poweron,resets_watchdog,resets_brownout,resets_commanded,resets_panic,resets_unknown,delay_beacon_s,delay_nominal_s,min_soc_pct,temp_min_c,temp_max_c,boot_count,last_mode,harness_msg";
+pub const CSV_HEADER: &str = "run_id,seed,class,fault,params,t_inj,applied,region,region_kind,verdict,categories,survived,nominal,criteria,resets_poweron,resets_watchdog,resets_brownout,resets_commanded,resets_panic,resets_unknown,delay_beacon_s,delay_nominal_s,min_soc_pct,temp_min_c,temp_max_c,boot_count,last_mode,cnt_ecc_corr,cnt_tmr_fix,cnt_tc_rejected,cnt_latchup,fdir_flags,sensor_fault_mask,line_state,harness_msg";
 
 fn csv_field(s: &str, out: &mut String) {
     if s.contains([',', '"', '\n', '\r']) {
@@ -284,6 +299,9 @@ pub fn csv_line(r: &Row) -> String {
     f(&fmt_f(r.temp_max), false);
     f(&r.boot_count.to_string(), false);
     f(&opt(r.last_mode), false);
+    for k in 0..7 {
+        f(&opt(r.beacon_cnt.map(|c| c[k])), false);
+    }
     f(r.harness.as_deref().unwrap_or(""), true);
     o
 }

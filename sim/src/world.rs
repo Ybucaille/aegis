@@ -483,6 +483,7 @@ impl World {
                 Err(_) => self.hw.set_pending_reset(ResetCause::Panic),
             }
         }
+        self.oracle.begin_step_reads();
         for f in self.hw.drain_delivered() {
             self.oracle.on_up_delivered(&f);
         }

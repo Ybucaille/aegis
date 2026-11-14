@@ -276,7 +276,13 @@ impl Oracle {
         });
     }
 
-    /// Trame montante réellement remise au firmware (après canal, injection éventuelle).
+    /// Début du lot de trames lues par le firmware pendant le pas courant : vide le lot précédent.
+    /// Une TC exécutée n'est rapprochée que des trames de CE lot (S5, T-029).
+    pub fn begin_step_reads(&mut self) {
+        self.up_delivered.clear();
+    }
+
+    /// Trame montante réellement lue par le firmware dans le pas courant (après canal, injection éventuelle).
     pub fn on_up_delivered(&mut self, bytes: &[u8]) {
         self.up_delivered.push(Delivered {
             bytes: bytes.to_vec(),
@@ -287,24 +293,23 @@ impl Oracle {
     /// `StepReport.executed_tc` : une TC a été exécutée.
     pub fn on_tc_executed(&mut self, t: u32, seq: u32, op: u8) {
         let seq_b = seq.to_be_bytes();
-        // La plus ancienne trame remise non consommée portant ce SEQ (le firmware lit en FIFO).
+        // Seules les trames lues dans ce pas sont candidates (`begin_step_reads`) : une trame plus
+        // ancienne, rejetée par le firmware, ne peut pas se voir attribuer cette exécution.
+        // La plus ancienne trame du lot non consommée portant ce SEQ et cet opcode (FIFO).
         let idx = self.up_delivered.iter().position(|d| {
-            !d.consumed && d.bytes.len() > PAYLOAD_OFF && d.bytes[SEQ_OFF..SEQ_OFF + 4] == seq_b
+            !d.consumed
+                && d.bytes.len() > PAYLOAD_OFF
+                && d.bytes[SEQ_OFF..SEQ_OFF + 4] == seq_b
+                && d.bytes[PAYLOAD_OFF] == op
         });
         let Some(i) = idx else {
             self.violate(format!(
-                "t={t}: TC seq={seq} op={op:#04x} exécutée sans trame remise correspondante (inventée ou rejeu)"
+                "t={t}: TC seq={seq} op={op:#04x} exécutée sans trame lue dans ce pas portant ce SEQ et cet opcode (inventée ou rejeu)"
             ));
             return;
         };
         self.up_delivered[i].consumed = true;
         let bytes = self.up_delivered[i].bytes.clone();
-        if bytes[PAYLOAD_OFF] != op {
-            self.violate(format!(
-                "t={t}: TC seq={seq} exécutée avec l'opcode {op:#04x} alors que la trame remise porte {:#04x}",
-                bytes[PAYLOAD_OFF]
-            ));
-        }
         let same: Vec<usize> = (0..self.up_emitted.len())
             .filter(|&k| self.up_emitted[k].bytes == bytes)
             .collect();
@@ -589,6 +594,74 @@ mod tests {
         let o = hot(300);
         assert!(o.criteria[3], "300 s exactement : pas d'échec");
         assert!(!o.categories.contains(&Category::Thermal));
+    }
+
+    fn frame(seq: u32, op: u8) -> Vec<u8> {
+        let mut f = vec![0u8; PAYLOAD_OFF + 3];
+        f[SEQ_OFF..SEQ_OFF + 4].copy_from_slice(&seq.to_be_bytes());
+        f[PAYLOAD_OFF] = op;
+        f
+    }
+
+    fn violated(o: &Oracle) -> bool {
+        !o.s5_violations.is_empty()
+    }
+
+    #[test]
+    fn s5_rejected_corrupt_frame_does_not_poison_later_seq() {
+        let mut o = Oracle::new(&Params::default());
+        let good = frame(17, opcode::REBOOT);
+        let corrupt = frame(17, opcode::REBOOT);
+        let mut corrupt = corrupt;
+        *corrupt.last_mut().unwrap() ^= 1; // différente de la trame émise
+        o.on_up_emitted(&good);
+        // t=10 : trame corrompue lue puis rejetée (aucune exécution)
+        o.begin_step_reads();
+        o.on_up_delivered(&corrupt);
+        // t=20 : la vraie trame, lue et exécutée une fois
+        o.begin_step_reads();
+        o.on_up_delivered(&good);
+        o.on_tc_executed(20, 17, opcode::REBOOT);
+        assert!(!violated(&o), "{:?}", o.s5_violations);
+    }
+
+    #[test]
+    fn s5_corrupt_frame_really_executed_is_violation() {
+        let mut o = Oracle::new(&Params::default());
+        let good = frame(17, opcode::REBOOT);
+        let mut corrupt = good.clone();
+        *corrupt.last_mut().unwrap() ^= 1;
+        o.on_up_emitted(&good);
+        o.begin_step_reads();
+        o.on_up_delivered(&corrupt);
+        o.on_tc_executed(10, 17, opcode::REBOOT);
+        assert!(violated(&o));
+    }
+
+    #[test]
+    fn s5_tc_executed_without_frame_read_in_this_step_is_violation() {
+        let mut o = Oracle::new(&Params::default());
+        let good = frame(17, opcode::REBOOT);
+        o.on_up_emitted(&good);
+        o.begin_step_reads();
+        o.on_up_delivered(&good);
+        // pas suivant : rien de lu, mais une exécution déclarée (rejeu/invention)
+        o.begin_step_reads();
+        o.on_tc_executed(11, 17, opcode::REBOOT);
+        assert!(violated(&o));
+    }
+
+    #[test]
+    fn s5_replayed_frame_executed_twice_is_violation() {
+        let mut o = Oracle::new(&Params::default());
+        let good = frame(17, opcode::REBOOT);
+        o.on_up_emitted(&good);
+        for t in [10, 20] {
+            o.begin_step_reads();
+            o.on_up_delivered(&good);
+            o.on_tc_executed(t, 17, opcode::REBOOT);
+        }
+        assert!(violated(&o));
     }
 
     #[test]

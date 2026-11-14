@@ -20,3 +20,18 @@ rejeu exécuté → E7 ; TC inventée → E7) ; `./scripts/ci.sh` → CI OK ; re
 `./scripts/rehearsal.sh`, AUCUNE autre ligne de `2_protected/runs.csv` ni `3_unprotected/runs.csv` ne change
 (colonnes d'origine) par rapport à la version commitée. Toute autre ligne modifiée : ARRÊT, rapport au manager.
 ## Compte rendu (rempli par l'agent)
+Fait : `oracle.rs` : nouvelle `begin_step_reads()` (vide le lot précédent) ; `on_tc_executed` ne rapproche plus que des
+trames lues dans CE pas (vérité `Hw::radio_recv` → `drain_delivered`, appelé juste après `fw.step`, donc même pas que
+`executed_tc`), avec SEQ ET opcode égaux (sinon violation) ; plus de mémoire des trames anciennes. La branche « opcode
+différent » est devenue inutile et supprimée (couverte par le non-appariement). `world.rs` : une ligne, appel de
+`begin_step_reads()` avant la boucle `drain_delivered`. Aucune règle « préférer l'intacte ». Règle applicable : le
+firmware lit et exécute dans le même `step`. S1–S6, seuils, E8, fault/params/firmware non touchés.
+Tests : nouveau `s5_rejected_corrupt_frame_does_not_poison_later_seq` ; + corrompue réellement exécutée → violation,
+exécution sans trame lue dans le pas → violation, rejeu → violation. Tests S5 existants inchangés (TC inventée, double
+exécution, aval altéré) et verts.
+Commandes : `cargo fmt` ; `cargo clippy -p sim --all-targets -- -D warnings` OK ; `cargo test --release -p sim` : tout vert
+(63 tests unitaires dont 7 S5, + intégration). Rejeux campagne 42/2000 (sorties sous results/t029-check/) :
+10219195993739918047 (run 1195) protégé et non protégé → OK_NOMINAL, violations S5 [] ; 16940148439563031665 → idem dans
+les deux variantes. `rehearsal.sh` NON lancé (consigne manager). `./scripts/ci.sh` : voir ci-dessous.
+Écart : aucun fonctionnel. Note : `cargo fmt` est workspace-wide ; fichiers T-028 modifiés par l'autre builder, non touchés par moi.
+ci.sh : CI OK (exit 0, 7/7 contrôles), lancé après mes modifications, avec les fichiers T-028 en l'état à ce moment.
