@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aegis - station sol</title>
+<style>
+:root{--bg:#fff;--fg:#1c1c1c;--mut:#666;--line:#d8d8d8;--ok:#1a7f37;--warn:#9a6700;--bad:#c62828;--card:#f6f6f6}
+@media (prefers-color-scheme:dark){:root{--bg:#161616;--fg:#e6e6e6;--mut:#999;--line:#333;--ok:#4cc26a;--warn:#e3b341;--bad:#ff6b6b;--card:#1f1f1f}}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,sans-serif;max-width:1000px;margin-inline:auto}
+h1{font-size:18px;margin:0 0 4px}h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin:0 0 8px}
+.sub{color:var(--mut);margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+section{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px}
+table{width:100%;border-collapse:collapse}td,th{padding:2px 0;text-align:left;vertical-align:top}th{color:var(--mut);font-weight:normal;width:50%}
+.num{font-variant-numeric:tabular-nums}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+button,select,input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:4px 8px}
+button{cursor:pointer}button:hover{border-color:var(--mut)}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+pre{margin:0;white-space:pre-wrap;word-break:break-word;font:12px/1.4 ui-monospace,monospace;max-height:160px;overflow:auto}
+#err{color:var(--bad);margin-bottom:8px;min-height:1em}
+</style>
+</head>
+<body>
+<h1>Aegis - station sol (simulation)</h1>
+<div class="sub">Simulation, aucune certification. <span id="clock" class="num"></span></div>
+<div id="err"></div>
+<div class="grid">
+<section><h2>Etat</h2><table id="t-state"></table></section>
+<section><h2>Energie et thermique</h2><table id="t-power"></table></section>
+<section><h2>Compteurs</h2><table id="t-cnt"></table></section>
+<section><h2>Liaison sol</h2><table id="t-link"></table></section>
+<section><h2>Injection de panne</h2>
+<div class="row"><select id="fclass"></select><input id="fseed" placeholder="graine (optionnel)" size="16"><button id="bfault">Injecter</button></div>
+<pre id="fres"></pre></section>
+<section><h2>Telecommande</h2>
+<div class="row"><button data-c='{"cmd":"Ping"}'>Ping</button><button data-c='{"cmd":"Reboot"}'>Reboot</button><button data-c='{"cmd":"ClearFdir"}'>ClearFdir</button><button data-c='{"cmd":"DumpEvents"}'>DumpEvents</button></div>
+<div class="row"><select id="mode"><option value="0">Survie</option><option value="1">Eco</option><option value="2" selected>Nominal</option></select><button id="bmode">SetMode</button>
+<select id="line"><option value="0">Payload</option><option value="1">Radio</option><option value="2">Heater</option></select><button id="bcycle">PowerCycle</button></div>
+<pre id="cres"></pre></section>
+<section><h2>Dernieres balises</h2><pre id="beacons"></pre></section>
+<section><h2>ACK et journal</h2><pre id="acks"></pre><pre id="log"></pre></section>
+<section style="grid-column:1/-1"><h2>Derniere campagne</h2><pre id="camp">chargement...</pre></section>
+</div>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const MODES=["Survie","Eco","Nominal"];
+const CLASSES=["F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12","F13","D1"];
+const LINES=["Payload","Radio","Heater"];
+const OPS={1:"Ping",2:"SetMode",3:"Reboot",4:"PowerCycle",5:"ClearFdir",6:"DumpEvents"};
+CLASSES.forEach(c=>{const o=document.createElement("option");o.textContent=c;$("fclass").appendChild(o)});
+function rows(id,list){$(id).innerHTML=list.map(([k,v,cls])=>`<tr><th>${k}</th><td class="num ${cls||""}">${v}</td></tr>`).join("")}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]))}
+function render(s){
+  const modeCls={Nominal:"ok",Eco:"warn",Survie:"bad"}[s.mode]||"bad";
+  rows("t-state",[["Mode",s.mode,modeCls],["CPU",s.cpu,s.cpu==="Running"?"ok":"bad"],["Fige",s.hung?"oui":"non",s.hung?"bad":""],
+    ["OBC alimente",s.obc_powered?"oui":"non",s.obc_powered?"":"bad"],["Orbite",s.in_eclipse?"eclipse":"soleil"],["Passe sol",s.in_pass?"en vue":"hors vue"],
+    ["Lignes",LINES.map((n,i)=>n+":"+((s.lines>>i)&1?"on":"off")).join(" ")]]);
+  rows("t-power",[["Charge batterie",s.soc_pct.toFixed(1)+" %",s.soc_pct<20?"bad":""],["Tension",s.vbatt_mv.toFixed(0)+" mV"],
+    ["Temperature",s.temp_c.toFixed(1)+" C"],["Solaire",s.solar_w.toFixed(2)+" W"],["Charges",s.load_w.toFixed(2)+" W"]]);
+  rows("t-cnt",[["Boots",s.boot_count],["Derniere cause",s.last_reset],["Resets par cause",s.resets_by_cause.join(" / ")],["Watchdog servi",s.kicked?"oui":"non"]]);
+  rows("t-link",[["Trames montantes",s.rx_frames],["Trames descendantes",s.tx_frames],["Perdues",s.tx_lost],["Balises recues",s.beacons_rx],
+    ["ACK recus",s.acks_rx],["TC envoyees",s.tc_sent],["Rejets sol",s.ground_rejects,s.ground_rejects?"warn":""]]);
+  $("clock").textContent="t="+s.t+" s (graine "+s.seed+", x"+s.speed+")";
+  $("beacons").textContent=s.beacons.map(b=>`t=${b.t} mode=${MODES[b.mode]??b.mode} boot=${b.boot_count} V=${b.vbatt_mv}mV T=${(b.temp_dc/10).toFixed(1)}C ecc=${b.ecc_corr} tmr=${b.tmr_fix}`).join("\n")||"aucune";
+  $("acks").textContent=s.acks.map(a=>`t=${a.t} ACK seq=${a.tc_seq} ${OPS[a.opcode]??a.opcode} ${a.result}`).join("\n")||"aucun ACK";
+  $("log").textContent=s.log.join("\n");
+}
+async function poll(){
+  try{const r=await fetch("/api/state",{cache:"no-store"});const s=await r.json();if(s.mode!==undefined){render(s);$("err").textContent=""}}
+  catch(e){$("err").textContent="serveur injoignable"}
+}
+async function post(url,body,out){
+  try{const r=await fetch(url,{method:"POST",body:JSON.stringify(body)});const j=await r.json();
+    $(out).textContent=r.ok?JSON.stringify(j):("erreur "+r.status+" : "+(j.error||""));poll()}
+  catch(e){$(out).textContent="serveur injoignable"}
+}
+$("bfault").onclick=()=>{const b={class:$("fclass").value};const s=$("fseed").value.trim();if(s!=="")b.seed=Number(s);post("/api/fault",b,"fres")};
+document.querySelectorAll("button[data-c]").forEach(b=>b.onclick=()=>post("/api/cmd",JSON.parse(b.dataset.c),"cres"));
+$("bmode").onclick=()=>post("/api/cmd",{cmd:"SetMode",arg:Number($("mode").value)},"cres");
+$("bcycle").onclick=()=>post("/api/cmd",{cmd:"PowerCycle",arg:Number($("line").value)},"cres");
+async function campaign(){
+  try{const r=await fetch("/api/campaign",{cache:"no-store"});$("camp").textContent=r.ok?JSON.stringify(await r.json(),null,1):"aucune campagne disponible (results/)"}
+  catch(e){$("camp").textContent="indisponible"}
+}
+poll();campaign();setInterval(poll,1000);setInterval(campaign,30000);
+</script>
+</body>
+</html>
