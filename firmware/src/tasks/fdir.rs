@@ -50,6 +50,11 @@ pub const LU_MARGIN_MA: i16 = 150;
 /// Seuil de surintensité par ligne (index = `Line as usize`), mA : courant nominal max à 6000 mV
 /// (Payload 1,2 W -> 200 mA ; récepteur 0,2 W -> 34 mA ; Heater 1,5 W -> 250 mA) + marge.
 pub const LU_THRESHOLD_MA: [i16; 3] = [200 + LU_MARGIN_MA, 34 + LU_MARGIN_MA, 250 + LU_MARGIN_MA];
+/// Plage plausible d'un capteur de courant de ligne (mA, bornes incluses) (C1, `docs/triage.md`).
+/// Le plus fort courant physique du modèle est 250 + 800 = 1050 mA (Heater nominal + latch-up
+/// maximal, annexe A) : la borne haute laisse un facteur ~2. Hors plage ou `Err` : capteur
+/// invalide pour le cycle (SPEC §4.4), jamais pris pour une surintensité.
+pub const ILINE_RANGE_MA: (i16, i16) = (-100, 2000);
 /// Capteur de courant de chaque ligne (index = `Line as usize`).
 pub const LINE_SENSOR: [SensorId; 3] = [
     SensorId::ILinePayload,
@@ -229,7 +234,17 @@ fn latchup<H: Hal>(ram: &mut Ram, hal: &mut H) {
             ram::LU_OVER[l].set(ram, 0);
             continue;
         }
-        let over = matches!(hal.sensor(LINE_SENSOR[l]), Ok(i) if i > LU_THRESHOLD_MA[l]);
+        let over = match hal.sensor(LINE_SENSOR[l]) {
+            Ok(i) if i >= ILINE_RANGE_MA.0 && i <= ILINE_RANGE_MA.1 => i > LU_THRESHOLD_MA[l],
+            _ => {
+                // Capteur invalide ce cycle (C1) : pas une surintensité (`LU_OVER` remis à 0
+                // ci-dessous), défaut signalé dans `sensor_fault_mask` (SPEC §4.4). `power`
+                // réécrit le masque à chaque cycle avant `fdir` : un OU suffit, sans état.
+                let m = ram::SENSOR_FAULT_MASK.get(ram) | (1 << LINE_SENSOR[l] as u16);
+                ram::SENSOR_FAULT_MASK.set(ram, m);
+                false
+            }
+        };
         let n = if over {
             ram::LU_OVER[l].get(ram).saturating_add(1)
         } else {
@@ -556,6 +571,100 @@ mod tests {
             ram::FDIR_FLAGS.get(fw.ram_mut()) & ram::FDIR_FLAG_CRITICAL,
             0
         );
+    }
+
+    /// C1 (`docs/triage.md`) : une lecture de courant de ligne hors de `ILINE_RANGE_MA` ou `Err`
+    /// n'est jamais un latch-up (ni coupure, ni compteur, ni isolement) ; le capteur est signalé
+    /// dans `sensor_fault_mask` à chaque cycle.
+    #[cfg(not(feature = "unprotected"))]
+    #[test]
+    fn c1_iline_out_of_range_is_not_latchup() {
+        let values: [Result<i16, HalError>; 4] =
+            [Ok(30000), Ok(i16::MAX), Ok(-30000), Err(HalError::Io)];
+        for line in Line::ALL {
+            let l = line as usize;
+            let bit = 1u16 << LINE_SENSOR[l] as u16;
+            for v in values {
+                let (mut fw, mut hal) = nominal();
+                if line == Line::Heater {
+                    hal.set_temp(-100); // réchauffeur commandé (batterie froide)
+                }
+                hal.set(LINE_SENSOR[l], v);
+                for c in 0..2000 {
+                    fw.step(&mut hal);
+                    let ctx = std::format!("{line:?} {v:?} cycle {c}");
+                    let ram = fw.ram_mut();
+                    assert_eq!(ram::CNT_LATCHUP.get(ram), 0, "{ctx}");
+                    assert_eq!(ram::LINE_ISOLATED.get(ram), 0, "{ctx}");
+                    for k in 0..3 {
+                        assert_eq!(ram::LU_OFF_LEFT[k].get(ram), 0, "{ctx}");
+                    }
+                    let f = ram::FDIR_FLAGS.get(ram);
+                    assert_eq!(f & ram::FDIR_FLAG_CRITICAL, 0, "{ctx}");
+                    assert_eq!(f & FDIR_FLAG_LINE_ISOLATED, 0, "{ctx}");
+                    assert_ne!(ram::SENSOR_FAULT_MASK.get(ram) & bit, 0, "{ctx}");
+                    assert!(hal.line_on(line.mask()), "ligne non commandée : {ctx}");
+                }
+                if line != Line::Heater {
+                    assert_eq!(mode::current(fw.ram_mut()), Mode::Nominal);
+                }
+                assert_ne!(hal.beacons().last().unwrap().sensor_fault_mask & bit, 0);
+                // Capteur revenu dans la plage : plus de bit au cycle suivant.
+                hal.set(LINE_SENSOR[l], Ok(0));
+                fw.step(&mut hal);
+                assert_eq!(ram::SENSOR_FAULT_MASK.get(fw.ram_mut()) & bit, 0);
+            }
+        }
+    }
+
+    /// C1 : la borne haute de plausibilité ne masque pas un latch-up réel jusqu'à 2000 mA ;
+    /// au-delà (2001 mA), la lecture est invalide et ignorée.
+    #[cfg(not(feature = "unprotected"))]
+    #[test]
+    fn c1_real_latchup_still_detected_up_to_range() {
+        // (ligne, courant nominal simulé)
+        let lines = [(Line::Payload, 160), (Line::Radio, 30), (Line::Heater, 220)];
+        for (line, nominal_ma) in lines {
+            let extras = [ILINE_RANGE_MA.1 - nominal_ma, 800];
+            for extra in extras {
+                let (mut fw, mut hal) = nominal();
+                if line == Line::Heater {
+                    hal.set_temp(-100);
+                }
+                let mut lu = Latch::new(line, nominal_ma, extra);
+                // Ligne alimentée et lue nominale avant l'apparition du latch-up.
+                let warm = run_latch(&mut fw, &mut hal, &mut lu, 5);
+                assert!(warm.iter().skip(1).all(|&x| x), "{line:?} non commandée");
+                lu.active = true;
+                let on = run_latch(&mut fw, &mut hal, &mut lu, 30);
+                let cut = on.iter().position(|&x| !x);
+                assert_eq!(
+                    cut,
+                    Some(LU_SAMPLES as usize - 1),
+                    "{line:?} +{extra} mA non coupée à temps"
+                );
+                let off = on[cut.unwrap()..].iter().take_while(|&&x| !x).count();
+                assert_eq!(off, LU_OFF_S as usize, "{line:?} +{extra} mA");
+                assert!(*on.last().unwrap(), "{line:?} non réarmée");
+                let ram = fw.ram_mut();
+                assert_eq!(ram::CNT_LATCHUP.get(ram), 1, "{line:?} +{extra} mA");
+                assert_eq!(
+                    ram::SENSOR_FAULT_MASK.get(ram) & (1 << LINE_SENSOR[line as usize] as u16),
+                    0
+                );
+            }
+            // 2001 mA : hors plage -> ignorée, aucune coupure.
+            let (mut fw, mut hal) = nominal();
+            if line == Line::Heater {
+                hal.set_temp(-100);
+            }
+            let mut lu = Latch::new(line, nominal_ma, ILINE_RANGE_MA.1 + 1 - nominal_ma);
+            run_latch(&mut fw, &mut hal, &mut lu, 5);
+            lu.active = true;
+            let on = run_latch(&mut fw, &mut hal, &mut lu, 30);
+            assert!(on.iter().all(|&x| x), "{line:?} coupée à 2001 mA");
+            assert_eq!(ram::CNT_LATCHUP.get(fw.ram_mut()), 0, "{line:?} 2001 mA");
+        }
     }
 
     /// Capteur figé alors que le redondant varie : invalidé à 120 s, tension validée = capteur
