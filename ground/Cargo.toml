@@ -1,0 +1,7 @@
+[package]
+name = "ground"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+firmware = { path = "../firmware" }

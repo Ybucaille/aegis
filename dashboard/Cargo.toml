@@ -1,0 +1,9 @@
+[package]
+name = "dashboard"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+firmware = { path = "../firmware" }
+ground = { path = "../ground" }
+sim = { path = "../sim" }

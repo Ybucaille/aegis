@@ -1,0 +1,14 @@
+# Journal de décisions (append-only : on ajoute en fin de fichier, on ne réécrit jamais)
+
+Format : `AAAA-MM-JJ | décision | raison | qui`
+
+2026-11-14 | Cible : simulation sur PC (binaire natif), dashboard sobre d'abord | simple et rapide à finir en 3 jours | utilisateur
+2026-11-14 | Témoin sans protections = feature cargo `sim/unprotected` → `firmware/unprotected` (pas de drapeau runtime seul) ; erreur si `SimConfig.protections` diverge du binaire | la SPEC cite les deux ; la feature garantit que le code de protection est réellement absent | manager
+2026-11-14 | CLI campagne : `--class none` (témoin sans panne) et `--class double` (D1 watchdog mort + blocage) ajoutés, définis en T-015 | valeurs manquantes dans la SPEC, nécessaires au plan anti-biais | manager
+2026-11-14 | Calibration annexe A (SoC initial 60 %, départ en éclipse, balise 3 W) : mesurée en T-009, traitée au PRE-MORTEM ; si le témoin < 100 % nominal, recalibrage des constantes physiques consigné ici, pas de modif SPEC sans accord | risque réel de témoin non nominal | manager
+2026-11-14 | Oracle (R3) : S2 « dernière passe » = dernière passe ENTIÈREMENT contenue dans [0, T_RUN] ; S6 compte tout redémarrage de l'OBC quelle qu'en soit la cause (y c. Commanded, coupure) ; S5 = comparaison octet à octet avec le registre des trames émises par le sol, sans repasser par `proto` | précisions d'une définition ambiguë, pas changement de critère (une passe tronquée par T_RUN rendrait S2 faux sans faute firmware) ; fixé avant T-013 | manager
+2026-11-14 | Instantanés (R10) : dépôt git local créé en T-001 ; commit local à chaque tâche close et tag à chaque gate (gate-j1, gate-j2, campagne-gelee) ; jamais de push | rend applicable le retrait des correctifs non verts à 70 % du J3 | manager
+2026-11-14 | F10 (R2) : décision accepter/recalibrer prise sur la mesure de T-008, au plus tard en T-019 ; par défaut accepter et documenter | la perte thermique OBC coupé est physique, pas un défaut firmware | manager
+2026-11-14 | Recalibrage annexe A (R1) : décidé après T-009 sur la grille de coins, avant T-010 ; constantes dans sim uniquement, consigné ici | le témoin doit être 100 % OK_NOMINAL avant d'injecter quoi que ce soit | manager
+2026-11-14 | Parallélisation T-011/T-012 (R4) : déclenchée si T-010 n'est pas close à 35 % du J2 ; repli T-011 sur Sonnet autorisé | goulot Opus sur le chemin critique | manager
+2026-11-14 | POINT D'ÉTAT fin phase 0 : SPEC.md écrite (strategist/Fable), 27 tâches T-001..T-027 + tasks/README.md, risks.md (19 risques, 12 tâches amendées). Décisions R1–R10 consignées ci-dessus. Pas de rustup : firmware no_std compilé en natif. Prochaine étape : T-001 (workspace cargo + git init), puis lot J1-A (T-002/T-003/T-004). | reprise de session | manager

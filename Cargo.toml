@@ -1,0 +1,11 @@
+[workspace]
+members = ["firmware", "sim", "ground", "dashboard"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+overflow-checks = true
+panic = "unwind"
