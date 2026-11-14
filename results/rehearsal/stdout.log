@@ -1,0 +1,25 @@
+== build protégé ==
+    Finished `release` profile [optimized] target(s) in 0.01s
+== build non protégé (target/unprotected) ==
+   Compiling firmware v0.1.0 (/home/pivuche/Documents/projets/espace/aegis/firmware)
+   Compiling ground v0.1.0 (/home/pivuche/Documents/projets/espace/aegis/ground)
+   Compiling sim v0.1.0 (/home/pivuche/Documents/projets/espace/aegis/sim)
+    Finished `release` profile [optimized] target(s) in 4.51s
+== (1) témoin sans panne, 1000 runs ==
+campagne : graine 42 ; 1000 runs ; classe none ; variante protected ; 16 fils
+1000 runs en 13.7 s (73.0 runs/s au total, 4.6 par fil) ; survie brute 1000/1000
+écrit : /home/pivuche/Documents/projets/espace/aegis/results/rehearsal/1_nominal/runs.csv, /home/pivuche/Documents/projets/espace/aegis/results/rehearsal/1_nominal/summary.json
+== (2) 2000 runs toutes classes, protégé ==
+campagne : graine 42 ; 2000 runs ; classe mixte ; variante protected ; 16 fils
+2000 runs en 27.2 s (73.4 runs/s au total, 4.6 par fil) ; survie brute 1801/2000
+écrit : /home/pivuche/Documents/projets/espace/aegis/results/rehearsal/2_protected/runs.csv, /home/pivuche/Documents/projets/espace/aegis/results/rehearsal/2_protected/summary.json
+== (3) mêmes 2000 graines, non protégé ==
+campagne : graine 42 ; 2000 runs ; classe mixte ; variante unprotected ; 16 fils
+2000 runs en 13.1 s (152.6 runs/s au total, 9.5 par fil) ; survie brute 1616/2000
+écrit : /home/pivuche/Documents/projets/espace/aegis/results/rehearsal/3_unprotected/runs.csv, /home/pivuche/Documents/projets/espace/aegis/results/rehearsal/3_unprotected/summary.json
+== (4) double panne D1, 200 runs ==
+campagne : graine 42 ; 200 runs ; classe D1 ; variante protected ; 16 fils
+200 runs en 1.1 s (184.3 runs/s au total, 11.5 par fil) ; survie brute 0/200
+écrit : /home/pivuche/Documents/projets/espace/aegis/results/rehearsal/4_double/runs.csv, /home/pivuche/Documents/projets/espace/aegis/results/rehearsal/4_double/summary.json
+REHEARSAL DONE
+./scripts/rehearsal.sh  786.96s user 2.16s system 1320% cpu 59.778 total
