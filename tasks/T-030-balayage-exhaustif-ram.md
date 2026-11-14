@@ -12,3 +12,10 @@ Première tâche sacrifiée si le jour 3 est en retard ; T-027 ne l'attend pas a
 Critère de fin (vérifiable): 6 fichiers de 8193 lignes ; deux lancements donnent des fichiers identiques ;
 aucun chiffre attendu n'est imposé (mesure brute).
 ## Compte rendu (rempli par l'agent)
+Fait : `sim/examples/ram_sweep.rs` (nouveau, seul fichier de code) ; `results/sweep/{protected,unprotected}/sweep_{5501,5502,5503}.csv`. Aucun autre fichier de `sim/` ni `firmware/` touché.
+Méthode : par graine, 1 run de référence sans panne puis 8192 runs `Fault::RamSeu{byte,bit}` à t_inj=3000 (`SimConfig::default()` + graine, durée standard), `World::try_new`/`step`/`finish`, protections = `PROTECTED_BUILD`. Parallélisme : threads std (16), compteur atomique, lignes réordonnées par indice de bit (sortie déterministe). `differs` = signature (verdict, resets par cause, boot_count, SoC min, T min en bits, trames TX, RX, écritures NVM, nombre de TC exécutées, dernière balise complète, nombre de balises reçues) différente de la référence. `verdict` = nom de l'oracle, `resets` = 6 compteurs par cause séparés par `/`. Panique/erreur du simulateur -> verdict `HARNESS` (aucun observé). Écart : « TC exécutées » comparé par leur nombre, pas par la liste (t, seq, opcode).
+Commandes : `cargo run --release -p sim --example ram_sweep -- --out results/sweep` ; `cargo run --release -p sim --example ram_sweep --features unprotected --target-dir target/unprotected -- --out results/sweep`. Machine chargée par la campagne en parallèle : ~3 min par graine et variante.
+Résultats : 6 fichiers de 8193 lignes. Déterminisme : second lancement des deux variantes dans un autre répertoire, `cmp` identique pour les 6 fichiers.
+Protégé : differs=1 = 7240 (5501), 7240 (5502), 7240 (5503) ; verdict non OK = 0, 0, 0 ; OK_DEGRADED 0.
+Non protégé : differs=1 = 217, 217, 225 ; verdict non OK = 1, 1, 1 ; OK_DEGRADED 3, 3, 3.
+Contrôles : `cargo clippy -p sim --examples -- -D warnings` propre ; `cargo fmt --check` propre. `ci.sh` non lancé (consigne). Rien commité.
