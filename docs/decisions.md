@@ -16,3 +16,6 @@ Format : `AAAA-MM-JJ | décision | raison | qui`
 2026-11-14 | Constantes physiques hors annexe A (T-003) : thermique tau=1000 s, R=40 K/W, T_env +15 °C soleil / -20 °C éclipse ; passe sol phase [1500,2100) ; éclipse [3600,5700) | choix du builder, bilan nominal mesuré +0,39 Wh/orbite (4,00 produit / 3,61 consommé), réchauffeur 32,9 % en éclipse | manager
 2026-11-14 | Biais connu à documenter au rapport : bruit capteur gaussien = somme de 12 uniformes (pas de queues extrêmes), légèrement favorable au firmware | honnêteté anti-biais | manager
 2026-11-14 | R5 : aucune liste blanche — zéro `static` dans firmware/src, tables constantes en `const` uniquement ; ci.sh reste strict | une exception ouvrirait la porte à l'état caché non injectable | manager
+2026-11-14 | Codages (T-002) : Mode Survie=0 < Eco=1 < Nominal=2 ; ResetCause 0..5 dans l'ordre SPEC §3 ; Beacon garde mode/reset_cause en u8 bruts (lisibles même corrompus) ; arguments de TC bruts, BadArg décidé à l'exécution | précisions d'implémentation, SPEC muette | manager
+2026-11-14 | Watchdog simulé (T-006) : accepte 0xA5 comme première clé après reset, puis clés alternées | alignement sim/firmware sur le bouchon T-002 | manager
+2026-11-14 | Format des entrées de journal (trames EVENTS) : défini en T-011 ; WdgCtrl/RadioCfg : valeurs fixées par systems en T-005 et consignées ici | SPEC muette | manager
