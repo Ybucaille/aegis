@@ -1,6 +1,8 @@
 //! Simulateur d'environnement Aegis : modules physiques purs, matériel simulé (`hw`) et monde (`world`).
+pub mod campaign;
 pub mod fault;
 pub mod hw;
+pub mod json;
 pub mod metrics;
 pub mod oracle;
 pub mod orbit;

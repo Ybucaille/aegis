@@ -8,6 +8,6 @@ firmware = { path = "../firmware" }
 ground = { path = "../ground" }
 
 [features]
-# Témoin sans protections. À câbler en `unprotected = ["firmware/unprotected"]` quand T-010 aura
-# ajouté la feature côté firmware (cargo refuse une feature de dépendance inexistante).
-unprotected = []
+# Témoin sans protections : active `firmware/unprotected` (vote, ECC, rafraîchissement, FDIR neutralisés).
+# À compiler dans un répertoire cible séparé : `--target-dir target/unprotected`.
+unprotected = ["firmware/unprotected"]
