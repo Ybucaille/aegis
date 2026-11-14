@@ -36,6 +36,8 @@ pub struct Hw {
     tx_staged: Vec<Vec<u8>>,
     nvm_writes: u32,
     rx_delivered: u32,
+    /// Trames montantes réellement remises au firmware (instrument de l'oracle S5, vidé par `World`).
+    delivered: Vec<Vec<u8>>,
 }
 
 impl Default for Hw {
@@ -60,6 +62,7 @@ impl Hw {
             tx_staged: Vec::new(),
             nvm_writes: 0,
             rx_delivered: 0,
+            delivered: Vec::new(),
         };
         hw.hw_reset(ResetCause::PowerOn);
         hw
@@ -156,6 +159,11 @@ impl Hw {
     }
 
     /// Une émission a-t-elle eu lieu ce tick (charge 3,0 W) ?
+    /// Vide le journal des trames montantes remises au firmware.
+    pub fn drain_delivered(&mut self) -> Vec<Vec<u8>> {
+        std::mem::take(&mut self.delivered)
+    }
+
     pub fn tx_this_tick(&self) -> bool {
         !self.tx_staged.is_empty()
     }
@@ -201,6 +209,7 @@ impl Hal for Hw {
         let f = self.uplink.pop_front()?;
         buf[..f.len()].copy_from_slice(&f);
         self.rx_delivered += 1;
+        self.delivered.push(f.clone());
         Some(f.len())
     }
 

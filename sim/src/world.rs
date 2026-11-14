@@ -2,6 +2,9 @@
 //! Le sol (`ground::Ground`, politique Auto) est branché sur le canal radio (étapes 5 et 6).
 
 use crate::hw::Hw;
+use crate::metrics;
+pub use crate::metrics::RunResult;
+use crate::oracle::{EndState, Oracle, TickObs, Truth};
 use crate::orbit::Orbit;
 use crate::params::Params;
 use crate::power::Power;
@@ -106,29 +109,6 @@ pub struct DownFrame {
     pub bytes: Vec<u8>,
 }
 
-/// Métriques brutes d'un run, sans verdict (l'oracle est T-013).
-#[derive(Clone, Debug, PartialEq)]
-pub struct RunResult {
-    pub seed: u64,
-    pub duration_s: u32,
-    pub final_snapshot: Option<Snapshot>,
-    pub resets_by_cause: [u32; 6],
-    pub reset_log: Vec<(u32, ResetCause)>,
-    pub boot_count: u32,
-    pub min_soc_pct: f64,
-    pub temp_min_c: f64,
-    pub temp_max_c: f64,
-    pub ticks_obc_off: u32,
-    pub tx_frames: u32,
-    pub tx_lost: u32,
-    pub rx_frames: u32,
-    pub nvm_writes: u32,
-    /// TC exécutées : (t, seq, opcode).
-    pub executed_tcs: Vec<(u32, u32, u8)>,
-    /// Vue finale de la station sol (balises, ACK, rejets).
-    pub ground: GroundSummary,
-}
-
 /// Résumé de la vue sol (comparable, contrairement à `GroundView`).
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct GroundSummary {
@@ -167,6 +147,9 @@ pub struct World {
     last_snapshot: Option<Snapshot>,
     ground: Ground,
     summary: GroundSummary,
+    oracle: Oracle,
+    truth: Truth,
+    ram_region: Option<String>,
     #[cfg(test)]
     fw_disabled: bool,
 }
@@ -186,6 +169,7 @@ impl World {
         let mut fw = Firmware::new();
         fw.boot(&mut hw);
         let min_soc = power.soc_pct();
+        let oracle = Oracle::new(&cfg.params);
         let cfg_soc_off = cfg.params.soc_off_pct;
         World {
             cfg,
@@ -218,6 +202,9 @@ impl World {
             last_snapshot: None,
             ground: Ground::new(Policy::Auto),
             summary: GroundSummary::default(),
+            oracle,
+            truth: Truth::default(),
+            ram_region: None,
             #[cfg(test)]
             fw_disabled: false,
         }
@@ -231,6 +218,41 @@ impl World {
     /// TC manuelle (dashboard) : mise en file, émise à la prochaine passe.
     pub fn queue_cmd(&mut self, c: Command) {
         self.ground.queue(c);
+    }
+
+    /// Vérité physique du simulateur (lignes détruites...), alimentée par l'injecteur et lue par l'oracle.
+    pub fn truth_mut(&mut self) -> &mut Truth {
+        &mut self.truth
+    }
+
+    /// Mémorise la région RAM touchée par la panne (métrique §8.2).
+    pub fn note_ram_region(&mut self, region: &str) {
+        self.ram_region = Some(region.to_string());
+    }
+
+    #[cfg(test)]
+    pub(crate) fn oracle_mut(&mut self) -> &mut Oracle {
+        &mut self.oracle
+    }
+
+    #[cfg(test)]
+    pub(crate) fn oracle_first_executed(&self) -> Option<(u32, u32, u8)> {
+        self.executed_tcs.first().copied()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn replace_ground(&mut self, g: Ground) {
+        self.ground = g;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_soc_pct(&mut self, soc: f64) {
+        self.power.set_soc_pct(soc);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_temp_c(&mut self, c: f64) {
+        self.thermal.set_temp_c(c);
     }
 
     pub fn hw(&self) -> &Hw {
@@ -347,6 +369,7 @@ impl World {
         let in_eclipse = self.orbit.in_eclipse();
         let in_pass = self.orbit.in_pass();
         let mut tx_this_tick = 0u32;
+        self.oracle.begin_tick(self.t, self.orbit.phase(), in_pass);
 
         // 2. capteurs (la physique est intégrée en fin de tick, une fois les charges connues)
         if self.power.obc_powered() {
@@ -367,10 +390,15 @@ impl World {
                 Err(_) => self.hw.set_pending_reset(ResetCause::Panic),
             }
         }
+        for f in self.hw.drain_delivered() {
+            self.oracle.on_up_delivered(&f);
+        }
+        let fw_cycle = report.is_some();
         if let Some(r) = report {
             self.last_report = Some((r.mode, r.kicked));
             if let Some((seq, op)) = r.executed_tc {
                 self.executed_tcs.push((self.t, seq, op));
+                self.oracle.on_tc_executed(self.t, seq, op);
             }
         }
 
@@ -398,6 +426,7 @@ impl World {
         for f in self.hw.drain_tx() {
             tx_this_tick += 1;
             self.tx_frames += 1;
+            self.oracle.on_down_emitted(&f);
             if in_pass {
                 self.ground_receive(&f);
                 self.downlink.push_back(DownFrame {
@@ -411,6 +440,7 @@ impl World {
 
         // 6. sol : opérateur automatique, une TC au plus par tick, seulement en passe
         if let Some((buf, n)) = self.ground.poll_tx(self.t, in_pass) {
+            self.oracle.on_up_emitted(&buf[..n]);
             self.hw.push_uplink(&buf[..n]);
         }
         self.summary.tc_sent = self.ground.view().tc_sent;
@@ -464,6 +494,14 @@ impl World {
 
         self.orbit.advance(tick_s);
         self.hw.set_link_up(self.orbit.in_pass());
+        self.oracle.end_tick(
+            self.t,
+            &TickObs {
+                temp_c: self.thermal.temp_c(),
+                fw_cycle,
+                next_in_pass: self.orbit.in_pass(),
+            },
+        );
 
         let snap = Snapshot {
             t: self.t,
@@ -498,15 +536,32 @@ impl World {
         snap
     }
 
+    /// Ligne réellement alimentée : interrupteur en vigueur, OBC alimenté, ligne non détruite.
+    fn line_live(&self, l: Line) -> bool {
+        self.power.obc_powered()
+            && self.hw.reg(Reg::LoadSwitches) & l.mask() != 0
+            && !self.truth.is_destroyed(l)
+    }
+
     /// Passe la trame au sol et journalise ce qu'elle a produit (au plus 1 trame par tick).
-    fn ground_receive(&mut self, bytes: &[u8]) {
+    /// Canal : point d'insertion de l'injecteur (T-014) ; l'oracle compare ce que le sol accepte
+    /// au registre des trames réellement émises.
+    pub(crate) fn ground_receive(&mut self, bytes: &[u8]) {
         let before = self.ground.view().frames_ok;
         self.ground.on_frame(self.t, bytes);
         let v = self.ground.view();
         if v.frames_ok > before {
+            self.oracle.on_down_accepted(self.t, bytes);
             if let Some((t, b)) = v.last_beacon {
                 if t == self.t && self.summary.beacons.last().map(|x| x.0) != Some(t) {
                     self.summary.beacons.push((t, b.mode, b.boot_count));
+                    self.oracle.on_beacon(
+                        t,
+                        &b,
+                        self.power.voltage_mv(),
+                        self.thermal.temp_c(),
+                        self.line_live(Line::Payload),
+                    );
                 }
             }
             if let Some((t, a)) = v.acks.back() {
@@ -514,14 +569,28 @@ impl World {
                     self.summary
                         .acks
                         .push((*t, a.tc_seq, a.opcode, a.result as u8));
+                    self.oracle.on_ack(a);
                 }
             }
         }
-        self.summary.rejects = v.rejects.total();
+        self.summary.rejects = self.ground.view().rejects.total();
     }
 
-    /// Métriques brutes, sans verdict.
+    /// Fin du run : métriques brutes et verdict de l'oracle.
     pub fn finish(self) -> RunResult {
+        let end = EndState {
+            t_end: self.t,
+            soc_pct: self.power.soc_pct(),
+            obc_powered: self.power.obc_powered(),
+            switches: (self.hw.reg(Reg::LoadSwitches) & 0b111) as u8,
+        };
+        let outcome = self.oracle.evaluate(&self.truth, &self.reset_log, &end);
+        let inject_t = self.cfg.faults.iter().map(|f| f.t).min();
+        let (delay_to_beacon_s, delay_to_nominal_s) = match inject_t {
+            Some(t0) => metrics::delays(t0, &self.summary.beacons),
+            None => (None, None),
+        };
+        let last_beacon = self.ground.view().last_beacon.map(|(_, b)| b);
         RunResult {
             seed: self.cfg.seed,
             duration_s: self.t,
@@ -539,6 +608,13 @@ impl World {
             nvm_writes: self.hw.nvm_writes(),
             executed_tcs: self.executed_tcs,
             ground: self.summary,
+            verdict: outcome.verdict,
+            outcome,
+            inject_t,
+            delay_to_beacon_s,
+            delay_to_nominal_s,
+            last_beacon,
+            ram_region: self.ram_region,
         }
     }
 }

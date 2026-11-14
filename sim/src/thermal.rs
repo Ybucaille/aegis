@@ -27,6 +27,12 @@ impl Thermal {
         self.temp_c
     }
 
+    /// Force la température (tests de l'oracle).
+    #[cfg(test)]
+    pub(crate) fn set_temp_c(&mut self, c: f64) {
+        self.temp_c = c;
+    }
+
     pub fn step(&mut self, in_eclipse: bool, heater_w: f64, dt_s: f64) {
         let env = if in_eclipse {
             self.env_ecl

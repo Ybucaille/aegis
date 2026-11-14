@@ -31,6 +31,12 @@ impl Power {
         100.0 * self.energy_wh / self.cap_wh
     }
 
+    /// Force l'état de charge (tests de l'oracle).
+    #[cfg(test)]
+    pub(crate) fn set_soc_pct(&mut self, soc: f64) {
+        self.energy_wh = self.cap_wh * soc.clamp(0.0, 100.0) / 100.0;
+    }
+
     pub fn voltage_mv(&self) -> f64 {
         self.v_base + self.v_slope * self.soc_pct()
     }
