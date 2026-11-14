@@ -1,5 +1,5 @@
 //! Monde simulé : physique + matériel + firmware réel. Séquence d'un tick : SPEC §3.1.
-//! Le sol n'est pas branché ici (T-008) : les deux files radio sont exposées par des méthodes.
+//! Le sol (`ground::Ground`, politique Auto) est branché sur le canal radio (étapes 5 et 6).
 
 use crate::hw::Hw;
 use crate::orbit::Orbit;
@@ -8,7 +8,9 @@ use crate::power::Power;
 use crate::prng::{splitmix64, Rng};
 use crate::sensors::Sensors;
 use crate::thermal::Thermal;
+use firmware::proto::Command;
 use firmware::{Firmware, Line, Mode, Reg, ResetCause, SensorId};
+use ground::{Ground, GroundView, Policy};
 use std::collections::VecDeque;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -88,6 +90,13 @@ pub struct Snapshot {
     pub tx_frames: u32,
     pub rx_frames: u32,
     pub tx_lost: u32,
+    /// Vue sol : balises valides reçues, ACK reçus, dernière balise (date, mode annoncé, boot_count).
+    pub beacons_rx: u32,
+    pub acks_rx: u32,
+    pub last_beacon: Option<(u32, u8, u16)>,
+    /// Trames rejetées par le sol (CRC, format...).
+    pub ground_rejects: u32,
+    pub tc_sent: u32,
 }
 
 /// Trame émise par le satellite et reçue par le sol pendant une passe.
@@ -116,6 +125,19 @@ pub struct RunResult {
     pub nvm_writes: u32,
     /// TC exécutées : (t, seq, opcode).
     pub executed_tcs: Vec<(u32, u32, u8)>,
+    /// Vue finale de la station sol (balises, ACK, rejets).
+    pub ground: GroundSummary,
+}
+
+/// Résumé de la vue sol (comparable, contrairement à `GroundView`).
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct GroundSummary {
+    /// (t, mode, boot_count) de chaque balise valide reçue (historique complet).
+    pub beacons: Vec<(u32, u8, u16)>,
+    /// (t, tc_seq, opcode, résultat) de chaque ACK reçu.
+    pub acks: Vec<(u32, u32, u8, u8)>,
+    pub rejects: u32,
+    pub tc_sent: u32,
 }
 
 pub struct World {
@@ -143,6 +165,10 @@ pub struct World {
     ticks_off: u32,
     executed_tcs: Vec<(u32, u32, u8)>,
     last_snapshot: Option<Snapshot>,
+    ground: Ground,
+    summary: GroundSummary,
+    #[cfg(test)]
+    fw_disabled: bool,
 }
 
 impl World {
@@ -160,6 +186,7 @@ impl World {
         let mut fw = Firmware::new();
         fw.boot(&mut hw);
         let min_soc = power.soc_pct();
+        let cfg_soc_off = cfg.params.soc_off_pct;
         World {
             cfg,
             fw,
@@ -170,7 +197,11 @@ impl World {
             sensors,
             srng,
             t: 0,
-            cpu: Cpu::Running,
+            cpu: if soc >= cfg_soc_off {
+                Cpu::Running
+            } else {
+                Cpu::Off
+            },
             hung: false,
             boot_count: 1,
             resets_by_cause: [0; 6],
@@ -185,7 +216,21 @@ impl World {
             ticks_off: 0,
             executed_tcs: Vec::new(),
             last_snapshot: None,
+            ground: Ground::new(Policy::Auto),
+            summary: GroundSummary::default(),
+            #[cfg(test)]
+            fw_disabled: false,
         }
+    }
+
+    /// Vue de la station sol.
+    pub fn ground(&self) -> &GroundView {
+        self.ground.view()
+    }
+
+    /// TC manuelle (dashboard) : mise en file, émise à la prochaine passe.
+    pub fn queue_cmd(&mut self, c: Command) {
+        self.ground.queue(c);
     }
 
     pub fn hw(&self) -> &Hw {
@@ -310,7 +355,11 @@ impl World {
 
         // 3. firmware
         let mut report = None;
-        if self.power.obc_powered() && self.cpu == Cpu::Running && !self.hung {
+        #[cfg(test)]
+        let fw_on = !self.fw_disabled;
+        #[cfg(not(test))]
+        let fw_on = true;
+        if fw_on && self.power.obc_powered() && self.cpu == Cpu::Running && !self.hung {
             let fw = &mut self.fw;
             let hw = &mut self.hw;
             match catch_unwind(AssertUnwindSafe(|| fw.step(hw))) {
@@ -330,7 +379,7 @@ impl World {
             Cpu::Running if self.power.obc_powered() => {
                 if let Some(c) = self.hw.take_pending_reset() {
                     self.do_reset(c);
-                } else if self.hw.wdg_tick() {
+                } else if fw_on && self.hw.wdg_tick() {
                     self.do_reset(ResetCause::Watchdog);
                 }
             }
@@ -350,6 +399,7 @@ impl World {
             tx_this_tick += 1;
             self.tx_frames += 1;
             if in_pass {
+                self.ground_receive(&f);
                 self.downlink.push_back(DownFrame {
                     t: self.t,
                     bytes: f,
@@ -358,6 +408,12 @@ impl World {
                 self.tx_lost += 1;
             }
         }
+
+        // 6. sol : opérateur automatique, une TC au plus par tick, seulement en passe
+        if let Some((buf, n)) = self.ground.poll_tx(self.t, in_pass) {
+            self.hw.push_uplink(&buf[..n]);
+        }
+        self.summary.tc_sent = self.ground.view().tc_sent;
 
         // physique : charges effectives (OBC alimenté, lignes selon LoadSwitches en vigueur)
         let p = &self.cfg.params;
@@ -431,10 +487,37 @@ impl World {
             tx_frames: tx_this_tick,
             rx_frames: self.hw.rx_delivered(),
             tx_lost: self.tx_lost,
+            beacons_rx: self.summary.beacons.len() as u32,
+            acks_rx: self.summary.acks.len() as u32,
+            last_beacon: self.summary.beacons.last().copied(),
+            ground_rejects: self.summary.rejects,
+            tc_sent: self.summary.tc_sent,
         };
         self.t += 1;
         self.last_snapshot = Some(snap.clone());
         snap
+    }
+
+    /// Passe la trame au sol et journalise ce qu'elle a produit (au plus 1 trame par tick).
+    fn ground_receive(&mut self, bytes: &[u8]) {
+        let before = self.ground.view().frames_ok;
+        self.ground.on_frame(self.t, bytes);
+        let v = self.ground.view();
+        if v.frames_ok > before {
+            if let Some((t, b)) = v.last_beacon {
+                if t == self.t && self.summary.beacons.last().map(|x| x.0) != Some(t) {
+                    self.summary.beacons.push((t, b.mode, b.boot_count));
+                }
+            }
+            if let Some((t, a)) = v.acks.back() {
+                if *t == self.t {
+                    self.summary
+                        .acks
+                        .push((*t, a.tc_seq, a.opcode, a.result as u8));
+                }
+            }
+        }
+        self.summary.rejects = v.rejects.total();
     }
 
     /// Métriques brutes, sans verdict.
@@ -455,6 +538,7 @@ impl World {
             rx_frames: self.hw.rx_delivered(),
             nvm_writes: self.hw.nvm_writes(),
             executed_tcs: self.executed_tcs,
+            ground: self.summary,
         }
     }
 }
@@ -479,6 +563,15 @@ mod tests {
         cfg.params.phase_init_s = Some(phase);
         cfg.params.soc_init_pct = Some(soc);
         World::new(cfg)
+    }
+
+    /// Monde sans firmware (`fw_disabled`) : le test pilote lui-même le matériel et lit la
+    /// physique, sans que la réécriture de `LoadSwitches` par le firmware réel (SPEC §4.1),
+    /// sa balise du 1er cycle ou sa lecture de la file montante ne faussent la mesure.
+    fn bench(phase: u32, soc: f64) -> World {
+        let mut w = world(phase, soc);
+        w.fw_disabled = true;
+        w
     }
 
     #[test]
@@ -524,7 +617,7 @@ mod tests {
 
     #[test]
     fn cut_line_reads_zero_current_and_costs_nothing() {
-        let mut w = world(0, 80.0);
+        let mut w = bench(0, 80.0);
         w.hw_mut()
             .reg_write(Reg::LoadSwitches, Line::Radio.mask() | Line::Payload.mask());
         let on = w.step();
@@ -540,7 +633,7 @@ mod tests {
 
     #[test]
     fn transmit_costs_3w_for_one_second() {
-        let mut w = world(0, 80.0);
+        let mut w = bench(0, 80.0);
         let base = w.step().load_w;
         w.hw_mut().radio_send(&[1, 2, 3]).unwrap();
         let tx = w.step();
@@ -551,7 +644,7 @@ mod tests {
 
     #[test]
     fn uplink_delivered_only_during_pass() {
-        let mut w = world(1490, 80.0);
+        let mut w = bench(1490, 80.0);
         assert!(w.push_uplink(&[9, 9, 9]));
         let mut buf = [0u8; firmware::MAX_FRAME];
         let mut got_at = None;
@@ -567,7 +660,7 @@ mod tests {
             "remise au premier tick de passe (phase 1500)"
         );
         // hors passe : jamais remise
-        let mut w = world(2200, 80.0);
+        let mut w = bench(2200, 80.0);
         assert!(w.push_uplink(&[1]));
         for _ in 0..1000 {
             assert!(w.hw_mut().radio_recv(&mut buf).is_none());
@@ -582,7 +675,7 @@ mod tests {
 
     #[test]
     fn downlink_delivered_in_pass() {
-        let mut w = world(1500, 80.0);
+        let mut w = bench(1500, 80.0);
         w.hw_mut().radio_send(&[7, 7]).unwrap();
         w.step();
         let d = w.drain_downlink();

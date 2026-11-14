@@ -14,6 +14,13 @@ pub const UPLINK_CAP: usize = 16;
 pub const WDG_TIMEOUT_DEFAULT: u16 = 10;
 /// `LoadSwitches` au reset matériel : seule la ligne Radio est alimentée.
 pub const LOAD_SWITCHES_DEFAULT: u16 = 0b010;
+/// `WdgCtrl` au reset matériel : bit 0 = watchdog actif (valeur de `firmware::WDG_CTRL_VALUE`).
+pub const WDG_CTRL_DEFAULT: u16 = 0x0001;
+/// `RadioCfg` au reset matériel : bit 0 = RX, bit 1 = TX (valeur de `firmware::RADIO_CFG_VALUE`).
+pub const RADIO_CFG_DEFAULT: u16 = 0x0003;
+pub const WDG_CTRL_ENABLE: u16 = 0x0001;
+pub const RADIO_CFG_RX: u16 = 0x0001;
+pub const RADIO_CFG_TX: u16 = 0x0002;
 
 #[derive(Clone, Debug)]
 pub struct Hw {
@@ -64,6 +71,8 @@ impl Hw {
         self.regs = [0; 4];
         self.regs[Reg::LoadSwitches as usize] = LOAD_SWITCHES_DEFAULT;
         self.regs[Reg::WdgTimeout as usize] = WDG_TIMEOUT_DEFAULT;
+        self.regs[Reg::WdgCtrl as usize] = WDG_CTRL_DEFAULT;
+        self.regs[Reg::RadioCfg as usize] = RADIO_CFG_DEFAULT;
         self.wdg_counter = WDG_TIMEOUT_DEFAULT as u32;
         self.wdg_next_key = KEY_FIRST;
         self.cause = cause;
@@ -72,7 +81,11 @@ impl Hw {
     }
 
     /// Un tick de watchdog ; `true` si le compteur atteint 0 (expiration).
+    /// Watchdog désactivé (bit 0 de `WdgCtrl` à 0) : le compteur est gelé, jamais d'expiration.
     pub fn wdg_tick(&mut self) -> bool {
+        if self.regs[Reg::WdgCtrl as usize] & WDG_CTRL_ENABLE == 0 {
+            return false;
+        }
         self.wdg_counter = self.wdg_counter.saturating_sub(1);
         self.wdg_counter == 0
     }
@@ -179,7 +192,10 @@ impl Hal for Hw {
 
     /// Reçoit une trame montante, seulement pendant la passe et ligne Radio alimentée.
     fn radio_recv(&mut self, buf: &mut [u8; MAX_FRAME]) -> Option<usize> {
-        if !self.link_up || !self.line_powered(firmware::Line::Radio) {
+        if !self.link_up
+            || !self.line_powered(firmware::Line::Radio)
+            || self.regs[Reg::RadioCfg as usize] & RADIO_CFG_RX == 0
+        {
             return None;
         }
         let f = self.uplink.pop_front()?;
@@ -192,6 +208,9 @@ impl Hal for Hw {
     fn radio_send(&mut self, frame: &[u8]) -> Result<(), HalError> {
         if !self.line_powered(firmware::Line::Radio) {
             return Err(HalError::NotPowered);
+        }
+        if self.regs[Reg::RadioCfg as usize] & RADIO_CFG_TX == 0 {
+            return Err(HalError::Io);
         }
         if frame.is_empty() || frame.len() > MAX_FRAME {
             return Err(HalError::OutOfRange);
@@ -279,6 +298,30 @@ mod tests {
         assert_eq!(b, [1, 2, 3]);
         assert_eq!(hw.reset_cause(), ResetCause::Watchdog);
         assert_eq!(hw.reg(Reg::WdgTimeout), WDG_TIMEOUT_DEFAULT);
+    }
+
+    #[test]
+    fn wdg_ctrl_and_radio_cfg_are_enforced() {
+        let mut hw = Hw::new();
+        hw.reg_write(Reg::WdgCtrl, 0);
+        for _ in 0..50 {
+            assert!(!hw.wdg_tick(), "watchdog désactivé : jamais d'expiration");
+        }
+        hw.reg_write(Reg::WdgCtrl, WDG_CTRL_ENABLE);
+        let mut expired = false;
+        for _ in 0..50 {
+            expired |= hw.wdg_tick();
+        }
+        assert!(expired);
+        hw.reg_write(Reg::RadioCfg, RADIO_CFG_RX);
+        assert_eq!(hw.radio_send(&[1]), Err(HalError::Io));
+        hw.reg_write(Reg::RadioCfg, RADIO_CFG_TX);
+        hw.set_link_up(true);
+        hw.push_uplink(&[1]);
+        let mut b = [0u8; MAX_FRAME];
+        assert!(hw.radio_recv(&mut b).is_none());
+        hw.reg_write(Reg::RadioCfg, RADIO_CFG_RX);
+        assert!(hw.radio_recv(&mut b).is_some());
     }
 
     #[test]
