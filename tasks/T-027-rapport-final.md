@@ -14,4 +14,5 @@ RÉSERVE : démarre AU PLUS TARD à 75 % du jour 3 (>= 20 % du jour 3 réservés
 Critère de fin (vérifiable): `test -f docs/REPORT.md` ; chaque taux du tableau (3) retrouvé dans le
 `summary.json` cité (contrôle par le manager sur 5 lignes tirées au hasard) ; `grep -c "Wilson" docs/REPORT.md`
 >= 1 ; `grep -ci "simulation" docs/REPORT.md` >= 1 ; section « Limites » présente ; `./scripts/ci.sh` → `CI OK`.
+Ajout T-019 : règles de rédaction obligatoires dans `docs/decisions.md` (entrée « Règles de rapport T-019 ») : tableau par classe avec la colonne « le témoin non protégé chute-t-il ? », aucune phrase attribuant aux protections la survie d'une classe non discriminante, F11 et `WdgRegHit` présentés comme non éprouvés, pas de taux global en tête.
 ## Compte rendu (rempli par l'agent)

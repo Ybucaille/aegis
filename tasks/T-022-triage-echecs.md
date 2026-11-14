@@ -13,4 +13,5 @@ Séquentiel. Budget : 10 % du jour 3.
 Critère de fin (vérifiable): `docs/triage.md` existe et chaque ligne non vide du tableau (1) de `failures.md` y a
 une décision (`grep -c "CORRIGER\|DOCUMENTER" docs/triage.md` >= nombre de couples) ; T-023 et T-024 complétées
 par le manager avec la liste ; `git status --porcelain docs/SPEC.md` → vide.
+Ajout T-019 : l'oracle n'est plus modifiable (B2 était le seul correctif d'oracle, fait avant tout run). Les échecs F5/E2 protégés vus à la répétition (5/143) sont à instruire ici par rejeu.
 ## Compte rendu (rempli par l'agent)

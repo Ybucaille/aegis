@@ -12,4 +12,5 @@ Critère de fin (vérifiable): `wc -l results/final/runs.csv results/validation/
 `results/final-control/summary.json` → 1000 `OK_NOMINAL` ; `results/main/runs.csv` inchangé (somme `sha256`
 identique à celle notée en T-020) ; `DIFF.md` contient une ligne par classe F1–F13 et la section « régressions »
 (éventuellement « aucune »).
+Ajout T-019 : graine `V` = 990274663 (jamais lancée avant cette tâche, y compris par `--replay`).
 ## Compte rendu (rempli par l'agent)

@@ -92,3 +92,62 @@ Trame = SYNC, TYPE, SEQ gros-boutiste, LEN, charge utile, CRC-32 sur `[2, 8+LEN)
 | TYPE `0x11`, SEQ 1, charge utile `01` | `ae 61 11 00 00 00 01 01 01 33 1b 23 e4` |
 | TYPE `0x12`, SEQ 7, charge utile `00 00 00 01 01 00` | `ae 61 12 00 00 00 07 06 00 00 00 01 01 00 ea 3a d2 59` |
 | TYPE `0x11`, SEQ `0x01020304`, LEN 0 | `ae 61 11 01 02 03 04 00 88 0b ea fb` |
+
+## 6. Revue de fin de jour 2 (T-019, 2026-11-14)
+
+Sources : `results/rehearsal/NOTES.md`, rejeux `campaign --replay`, lecture du code, et un balayage exhaustif
+fait hors dépôt (une graine, une date : ordre de grandeur seulement). Détail chiffré dans `docs/decisions.md`.
+
+### 6.1 État des risques du registre
+
+| # | État | Constat (mesuré sauf mention) |
+|---|---|---|
+| R1 | Clos | Témoin 1000/1000 `OK_NOMINAL` à la répétition ; aucun recalibrage. |
+| R2 | Réalisé, accepté | F10 : 65,0 % (93/143), 50 échecs tous `E2`, identique sans protections. Décision confirmée : documenter. |
+| R3 | Clos, puis rouvert sur un point | Interprétations fixées avant T-013. Mais un défaut d'attribution S5 a été trouvé en T-019 (voir R21). |
+| R4 | Réalisé, absorbé | T-011 ∥ T-012 lancés en parallèle ; firmware complet à la gate. |
+| R5 | Clos | Zéro `static` dans `firmware/src`, contrôle dans `ci.sh`. |
+| R6 | **Réalisé, plus fort que prévu** | F1/F2/F8 : 100 % dans les deux variantes, lignes identiques. Balayage : le témoin n'échoue que sur ~1 bit sur 8192. La ventilation par région ne sauve rien : même par région, pas d'écart. Voir R22. |
+| R7 | Ouvert, accepté | Non réévalué ici ; reste une limite à écrire (un seul lecteur de la charge utile). |
+| R8 | Réalisé en partie | Le témoin compile et tourne, mais il garde les trois copies et lit la copie 0 : il dilue les SEU par 3. Borne grossière, à dire. |
+| R9 | Clos côté panique | Test à CRC valide et contenu aléatoire vert (T-011). Limite `last_tc_seq` saturé documentée. |
+| R10 | Clos | Commits par tâche, tag `gate-j1`. À poser : `gate-j2`, `campagne-gelee`. |
+| R11 | Clos | 73 runs/s (protégé, 16 fils) ; plan J3 complet ≈ 30 min de calcul. |
+| R12 | Réalisé, accepté | F3 : 100 % protégé contre 74,8 % non protégé → la panne mord, la protection est mesurée. `WdgRegHit` : ne mord dans AUCUNE variante (latent), voir R23. |
+| R13 | Non observé | Aucun `COMMS_LOST` sur F1 `Tm`/`Proto` (143 runs). Effectif trop faible pour conclure. |
+| R14 | À instruire | F5 protégé : 5/143 en `E2`, non protégé 7 `E8` + 4 `E2`. Cause non établie → T-022. |
+| R15 | Ouvert | Règle inchangée : le manager relit la liste des fichiers modifiés après chaque tâche `tester`. |
+| R16 | Ouvert | Graines S et V écrites au gel ; V jamais lancée avant T-025. |
+| R17 | Ouvert | Coupure de quota déjà subie une fois (T-010/T-014). T-022 et T-027 reprenables par Opus. |
+| R18 | Clos | Dashboard livré (T-016). |
+| R19 | Accepté | Inchangé. |
+
+### 6.2 Risques nouveaux
+
+| # | Risque | P | I | Action ou acceptation |
+|---|---|---|---|---|
+| R20 | **Machine partagée** : une autre session remplit `/tmp` (quota atteint pendant cette revue) et occupe les cœurs. Une campagne qui écrit sous `/tmp` ou qui échoue à mi-course donnerait des résultats tronqués. | M | É | Résultats sous `results/` uniquement ; `campaign.sh` vérifie `wc -l` de chaque `runs.csv` avant de rendre 0 ; le déterminisme permet de relancer à l'identique. |
+| R21 | **Faux positif E7 de l'oracle** (trame corrompue rejetée dont le SEQ basculé vaut un SEQ futur). 2/143 runs F6 à la répétition, à tort. | Certain | É | Correctif bloquant B2 (T-029) avant tout run. Après le gel, plus aucune retouche de l'oracle : si un autre défaut d'oracle apparaît en T-022, il se DOCUMENTE et les runs concernés sont listés, il ne se corrige pas en silence. |
+| R22 | **Le rapport conclut « TMR/SECDED protègent » sur un taux qui ne le montre pas.** F1, F2, F8 : le témoin survit aussi. | É | É | B1 (T-028) donne le nombre de runs où la correction a réellement eu lieu ; règles de rédaction imposées à T-027 ; T-030 facultative pour un chiffre discriminant. Sinon : accepté et écrit tel quel. |
+| R23 | **Classes injectées mais non éprouvées** : F11 (NVM jamais relue sans reset), `WdgRegHit` (latent sans blocage). Leur 100 % ne dit rien. | Certain | M | Accepté. Les rendre observables = pannes composées = changement de SPEC §7 → `docs/later.md`. Le rapport les étiquette « non éprouvé ». |
+| R24 | **Correctifs B1/B2 qui changent autre chose que prévu** à quelques heures de la campagne. | F | É | Critère de levée mécanique : colonnes d'origine de la répétition identiques octet pour octet sauf run_id 1195 et 1279. |
+| R25 | **Puissance statistique** : F5 (96,5 % contre 92,3 % à n=143, intervalles qui se recouvrent) peut rester non concluant ; F6 après B2 passera à ~100 % dans les deux variantes (CRC et anti-rejeu ne sont pas neutralisés dans le témoin). | M | M | Accepté ; à n≈1430 l'écart F5 devrait se resserrer. F6 rejoint la liste « non discriminant par construction du témoin ». |
+
+### 6.3 Checklist de `CLAUDE.md`, reparcourue
+
+| Point | État fin J2 |
+|---|---|
+| Pannes reproductibles, graine loguée | Vert : déterminisme testé, 16 fils = 1 fil, `--replay` utilisé pendant cette revue et fidèle. |
+| Watchdog touché ; FDIR touché | Injecté, **peu éprouvé** : `WdgSpurious` et `CpuHang` récupèrent (mécanisme matériel) ; `WdgRegHit` latent ; F8 sans effet mesurable sur la survie, y compris sans protections. D1 : 0/142, perte assumée. |
+| Inversion de priorité | Non réévalué ; aucun modèle de temps d'exécution (limite §7.2). |
+| Batterie vide en éclipse | Redémarre (0,80 reset par run) ; 35 % d'échecs thermiques par la physique. Chiffre « redevient commandable » à extraire en T-021. |
+| Commande corrompue ou rejouée | Les 2 échecs observés étaient un défaut de l'oracle (R21). Après B2, attendu ~100 % dans les deux variantes : la classe ne discrimine pas. Preuve complémentaire : fuzzing T-017. |
+| « Survit » défini avant la campagne | Vert : SPEC §8 inchangée, gel écrit, B2 ne touche pas à la définition. |
+| Assez de cas, échecs catégorisés | ~1430 runs par classe prévus. Insuffisant pour F1 côté témoin (échec ~1e-4) : dit, pas compensé. |
+| Simulateur biaisé en faveur du firmware | Biais connus listés dans `decisions.md`. Nouveau : le témoin lui-même est flatteur pour F1/F2 (R8, R22) ; l'oracle était biaisé CONTRE le firmware sur F6 (R21). |
+| Temps réservé au rapport | T-027 démarre à 75 % du J3 quoi qu'il arrive ; B1/B2 coûtent 1 à 2 h en tête de J3, T-030 est la première sacrifiée. |
+
+Ajouts à la checklist :
+- Une classe à 100 % laisse-t-elle une TRACE de détection dans les données (compteur), ou seulement l'absence d'échec ?
+- Le témoin non protégé échoue-t-il sur cette classe ? Sinon le taux ne mesure pas la protection.
+- Chaque échec observé a-t-il été rejoué au moins une fois avant le gel de l'oracle ?

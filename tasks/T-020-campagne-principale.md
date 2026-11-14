@@ -13,4 +13,5 @@ Critère de fin (vérifiable): `./scripts/campaign.sh` → code 0 ; `wc -l resul
 `results/main/summary.json` donne effectif >= 1000 pour chaque classe P1 ; `results/control/summary.json` →
 1000 `OK_NOMINAL` ; relance de `results/main` sur 500 runs (`--runs 500`) → 500 premières lignes identiques
 (`cmp` sur `head -501`).
+Ajout T-019 : dépend aussi de T-028 et T-029 (NO-GO levé par le manager). Graine `S` = 731051977. `scripts/campaign.sh` vérifie que `git status --porcelain firmware sim` est vide avant de lancer. Résultats écrits sous `results/` (jamais sous `/tmp` : quota partagé, R20).
 ## Compte rendu (rempli par l'agent)
