@@ -1,0 +1,4 @@
+campagne : graine 990274663 ; 20000 runs ; classe mixte ; variante protected ; 16 fils
+20000 runs en 744.4 s (26.9 runs/s au total, 1.7 par fil) ; survie brute 18156/20000
+écrit : results/validation/runs.csv, results/validation/summary.json
+EXIT=0
