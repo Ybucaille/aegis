@@ -15,3 +15,11 @@ Critère de fin (vérifiable): `./scripts/campaign.sh` → code 0 ; `wc -l resul
 (`cmp` sur `head -501`).
 Ajout T-019 : dépend aussi de T-028 et T-029 (NO-GO levé par le manager). Graine `S` = 731051977. `scripts/campaign.sh` vérifie que `git status --porcelain firmware sim` est vide avant de lancer. Résultats écrits sous `results/` (jamais sous `/tmp` : quota partagé, R20).
 ## Compte rendu (rempli par l'agent)
+
+Fait : `scripts/campaign.sh` écrit et lancé une fois (code retour 0, `results/campaign.log`, `EXIT=0`). Graine S = 731051977 seule ; V non utilisée. Aucune modification de `firmware/` ni `sim/`, aucun run écarté, aucune relance avec une autre graine. Non commité.
+Écarts : (a) `results/main/VERSION` = `7c4e865893c68f128dd74b121f19f1160286bb96` (HANDOFF) et non `0c32759…` (tag `campagne-gelee`) : un commit `7c4e865` (HANDOFF.md seul, `git diff 0c32759 7c4e865 -- firmware sim` vide) a été posé pendant la campagne, avant la fin du script. Le code est identique au tag. (b) `summary.json` porte `git` = `…-dirty` car `results/` est non ignoré (aucune modification de code). (c) `results/campaign_durations.csv`, `results/campaign.log` et le dossier `results/` sont non suivis.
+Commandes : `./scripts/campaign.sh` → 0. Contrôle : `cmp head -501 results/main/runs.csv` vs `results/main-check500/runs.csv` → identique.
+Effectifs (`results/main/summary.json`, 20000 runs, 0 E0 exclu) : F1..F8 = 1429 ; F9, F10, F11 = 1428 (min P1 = 1428 ≥ 1000). F12, F13, D1 = 1428.
+Témoin `results/control` : 1000/1000 OK_NOMINAL. Double `results/double` : 1000 runs, survie 0/1000. E0 : 0 (`runs_e0_exclus` = 0 sur les 4 campagnes).
+Survie brute (sans grille de catégories, à publier avec Wilson par le rapport) : protégé main 18132/20000 ; non protégé 16313/20000 (`results/unprotected`) ; relance 500 : 453/500.
+Durées (`results/campaign_durations.csv`) : control 14,1 s ; main 258,1 s ; unprotected 126,1 s ; double 4,7 s ; check500 6,1 s (total ≈ 409 s hors builds).

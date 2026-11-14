@@ -1,0 +1,41 @@
+== build protégé ==
+    Finished `release` profile [optimized] target(s) in 0.01s
+== build non protégé (target/unprotected) ==
+    Finished `release` profile [optimized] target(s) in 0.01s
+VERSION : 7c4e865893c68f128dd74b121f19f1160286bb96
+== (1) témoin sans panne, 1000 runs ==
+campagne : graine 731051977 ; 1000 runs ; classe none ; variante protected ; 16 fils
+1000 runs en 14.1 s (71.1 runs/s au total, 4.4 par fil) ; survie brute 1000/1000
+écrit : /home/pivuche/Documents/projets/espace/aegis/results/control/runs.csv, /home/pivuche/Documents/projets/espace/aegis/results/control/summary.json
+témoin : 1000/1000 OK_NOMINAL (attendu 1000/1000)
+== (2) campagne principale protégée, 20000 runs mixtes ==
+campagne : graine 731051977 ; 20000 runs ; classe mixte ; variante protected ; 16 fils
+20000 runs en 258.0 s (77.5 runs/s au total, 4.8 par fil) ; survie brute 18132/20000
+écrit : /home/pivuche/Documents/projets/espace/aegis/results/main/runs.csv, /home/pivuche/Documents/projets/espace/aegis/results/main/summary.json
+== (3) mêmes graines, non protégé, 20000 runs ==
+campagne : graine 731051977 ; 20000 runs ; classe mixte ; variante unprotected ; 16 fils
+20000 runs en 126.0 s (158.8 runs/s au total, 9.9 par fil) ; survie brute 16313/20000
+écrit : /home/pivuche/Documents/projets/espace/aegis/results/unprotected/runs.csv, /home/pivuche/Documents/projets/espace/aegis/results/unprotected/summary.json
+== (4) double panne D1, 1000 runs ==
+campagne : graine 731051977 ; 1000 runs ; classe D1 ; variante protected ; 16 fils
+1000 runs en 4.7 s (213.5 runs/s au total, 13.3 par fil) ; survie brute 0/1000
+écrit : /home/pivuche/Documents/projets/espace/aegis/results/double/runs.csv, /home/pivuche/Documents/projets/espace/aegis/results/double/summary.json
+== (5) contrôle de reproductibilité : 500 premiers runs relancés ==
+campagne : graine 731051977 ; 500 runs ; classe mixte ; variante protected ; 16 fils
+500 runs en 6.1 s (81.7 runs/s au total, 5.1 par fil) ; survie brute 453/500
+écrit : /home/pivuche/Documents/projets/espace/aegis/results/main-check500/runs.csv, /home/pivuche/Documents/projets/espace/aegis/results/main-check500/summary.json
+CMP OK : 500 premières lignes identiques (+ en-tête)
+== contrôle effectifs P1 (results/main/summary.json) ==
+F1 n=1429
+F2 n=1429
+F3 n=1429
+F4 n=1429
+F5 n=1429
+F6 n=1429
+F7 n=1429
+F8 n=1429
+F9 n=1428
+F10 n=1428
+F11 n=1428
+CAMPAIGN DONE
+EXIT=0

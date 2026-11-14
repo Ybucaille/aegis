@@ -1,0 +1,1300 @@
+{
+  "variante": "protected",
+  "graine_campagne": 731051977,
+  "git": "7c4e865-dirty",
+  "options": {
+    "seed": 731051977,
+    "runs": 20000,
+    "class": "mixte (F1..F13, D1 cycliques)",
+    "unprotected": false,
+    "threads": 16
+  },
+  "runs_total": 20000,
+  "runs_e0_exclus": 0,
+  "e0_exclus": [],
+  "global": {
+    "avertissement": "jamais de taux global sans le detail par classe ; la ponderation entre classes est arbitraire",
+    "stats": {
+      "n": 20000,
+      "survie": {
+        "k": 18132,
+        "taux": 0.9066,
+        "wilson95": [
+          0.9024886779583557,
+          0.9105551583208199
+        ]
+      },
+      "retour_nominal": {
+        "k": 17614,
+        "taux": 0.8807,
+        "wilson95": [
+          0.8761344432044741,
+          0.8851193405424079
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 1868,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 1868,
+          "E3 DEAD": 1428,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 20000,
+        "survie": {
+          "k": 18132,
+          "taux": 0.9066,
+          "wilson95": [
+            0.9024886779583557,
+            0.9105551583208199
+          ]
+        },
+        "retour_nominal": {
+          "k": 17614,
+          "taux": 0.8807,
+          "wilson95": [
+            0.8761344432044741,
+            0.8851193405424079
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    }
+  },
+  "par_classe": {
+    "F1": {
+      "n": 1429,
+      "survie": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "retour_nominal": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1429,
+        "survie": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0,
+      "par_type_de_region": {
+        "Sched": {
+          "n": 65,
+          "survie": {
+            "k": 65,
+            "taux": 1,
+            "wilson95": [
+              0.9441984686771432,
+              1
+            ]
+          },
+          "retour_nominal": {
+            "k": 65,
+            "taux": 1,
+            "wilson95": [
+              0.9441984686771432,
+              1
+            ]
+          }
+        },
+        "Mode": {
+          "n": 72,
+          "survie": {
+            "k": 72,
+            "taux": 1,
+            "wilson95": [
+              0.9493488274035422,
+              1
+            ]
+          },
+          "retour_nominal": {
+            "k": 72,
+            "taux": 1,
+            "wilson95": [
+              0.9493488274035422,
+              1
+            ]
+          }
+        },
+        "Fdir": {
+          "n": 303,
+          "survie": {
+            "k": 303,
+            "taux": 1,
+            "wilson95": [
+              0.987480639560709,
+              1
+            ]
+          },
+          "retour_nominal": {
+            "k": 303,
+            "taux": 1,
+            "wilson95": [
+              0.987480639560709,
+              1
+            ]
+          }
+        },
+        "Proto": {
+          "n": 69,
+          "survie": {
+            "k": 69,
+            "taux": 1,
+            "wilson95": [
+              0.9472627418109483,
+              1
+            ]
+          },
+          "retour_nominal": {
+            "k": 69,
+            "taux": 1,
+            "wilson95": [
+              0.9472627418109483,
+              1
+            ]
+          }
+        },
+        "Tm": {
+          "n": 53,
+          "survie": {
+            "k": 53,
+            "taux": 1,
+            "wilson95": [
+              0.932418011423458,
+              0.9999999999999999
+            ]
+          },
+          "retour_nominal": {
+            "k": 53,
+            "taux": 1,
+            "wilson95": [
+              0.932418011423458,
+              0.9999999999999999
+            ]
+          }
+        },
+        "Log": {
+          "n": 726,
+          "survie": {
+            "k": 726,
+            "taux": 1,
+            "wilson95": [
+              0.9947365845359055,
+              1
+            ]
+          },
+          "retour_nominal": {
+            "k": 726,
+            "taux": 1,
+            "wilson95": [
+              0.9947365845359055,
+              1
+            ]
+          }
+        },
+        "Unused": {
+          "n": 141,
+          "survie": {
+            "k": 141,
+            "taux": 1,
+            "wilson95": [
+              0.9734781819240744,
+              1
+            ]
+          },
+          "retour_nominal": {
+            "k": 141,
+            "taux": 1,
+            "wilson95": [
+              0.9734781819240744,
+              1
+            ]
+          }
+        }
+      },
+      "avec_region_unused": {
+        "n": 1429,
+        "survie": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        }
+      },
+      "sans_region_unused": {
+        "n": 1288,
+        "survie": {
+          "k": 1288,
+          "taux": 1,
+          "wilson95": [
+            0.9970263697650631,
+            0.9999999999999999
+          ]
+        },
+        "retour_nominal": {
+          "k": 1288,
+          "taux": 1,
+          "wilson95": [
+            0.9970263697650631,
+            0.9999999999999999
+          ]
+        }
+      }
+    },
+    "F2": {
+      "n": 1429,
+      "survie": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "retour_nominal": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1429,
+        "survie": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0,
+      "par_type_de_region": {
+        "Sched": {
+          "n": 78,
+          "survie": {
+            "k": 78,
+            "taux": 1,
+            "wilson95": [
+              0.9530621902878059,
+              1
+            ]
+          },
+          "retour_nominal": {
+            "k": 78,
+            "taux": 1,
+            "wilson95": [
+              0.9530621902878059,
+              1
+            ]
+          }
+        },
+        "Mode": {
+          "n": 70,
+          "survie": {
+            "k": 70,
+            "taux": 1,
+            "wilson95": [
+              0.9479769375897331,
+              1
+            ]
+          },
+          "retour_nominal": {
+            "k": 70,
+            "taux": 1,
+            "wilson95": [
+              0.9479769375897331,
+              1
+            ]
+          }
+        },
+        "Fdir": {
+          "n": 290,
+          "survie": {
+            "k": 290,
+            "taux": 1,
+            "wilson95": [
+              0.9869267637177155,
+              1
+            ]
+          },
+          "retour_nominal": {
+            "k": 290,
+            "taux": 1,
+            "wilson95": [
+              0.9869267637177155,
+              1
+            ]
+          }
+        },
+        "Proto": {
+          "n": 70,
+          "survie": {
+            "k": 70,
+            "taux": 1,
+            "wilson95": [
+              0.9479769375897331,
+              1
+            ]
+          },
+          "retour_nominal": {
+            "k": 70,
+            "taux": 1,
+            "wilson95": [
+              0.9479769375897331,
+              1
+            ]
+          }
+        },
+        "Tm": {
+          "n": 53,
+          "survie": {
+            "k": 53,
+            "taux": 1,
+            "wilson95": [
+              0.932418011423458,
+              0.9999999999999999
+            ]
+          },
+          "retour_nominal": {
+            "k": 53,
+            "taux": 1,
+            "wilson95": [
+              0.932418011423458,
+              0.9999999999999999
+            ]
+          }
+        },
+        "Log": {
+          "n": 726,
+          "survie": {
+            "k": 726,
+            "taux": 1,
+            "wilson95": [
+              0.9947365845359055,
+              1
+            ]
+          },
+          "retour_nominal": {
+            "k": 726,
+            "taux": 1,
+            "wilson95": [
+              0.9947365845359055,
+              1
+            ]
+          }
+        },
+        "Unused": {
+          "n": 142,
+          "survie": {
+            "k": 142,
+            "taux": 1,
+            "wilson95": [
+              0.9736600356869919,
+              0.9999999999999999
+            ]
+          },
+          "retour_nominal": {
+            "k": 142,
+            "taux": 1,
+            "wilson95": [
+              0.9736600356869919,
+              0.9999999999999999
+            ]
+          }
+        }
+      },
+      "avec_region_unused": {
+        "n": 1429,
+        "survie": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        }
+      },
+      "sans_region_unused": {
+        "n": 1287,
+        "survie": {
+          "k": 1287,
+          "taux": 1,
+          "wilson95": [
+            0.9970240661279942,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1287,
+          "taux": 1,
+          "wilson95": [
+            0.9970240661279942,
+            1
+          ]
+        }
+      }
+    },
+    "F3": {
+      "n": 1429,
+      "survie": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "retour_nominal": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1429,
+        "survie": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    },
+    "F4": {
+      "n": 1429,
+      "survie": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "retour_nominal": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1429,
+        "survie": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    },
+    "F5": {
+      "n": 1429,
+      "survie": {
+        "k": 1389,
+        "taux": 0.9720083974807557,
+        "wilson95": [
+          0.9621089117330571,
+          0.9793769670398113
+        ]
+      },
+      "retour_nominal": {
+        "k": 1327,
+        "taux": 0.9286214135759272,
+        "wilson95": [
+          0.9140921576451301,
+          0.9408523949840498
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 40,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 40,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1429,
+        "survie": {
+          "k": 1389,
+          "taux": 0.9720083974807557,
+          "wilson95": [
+            0.9621089117330571,
+            0.9793769670398113
+          ]
+        },
+        "retour_nominal": {
+          "k": 1327,
+          "taux": 0.9286214135759272,
+          "wilson95": [
+            0.9140921576451301,
+            0.9408523949840498
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    },
+    "F6": {
+      "n": 1429,
+      "survie": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "retour_nominal": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1429,
+        "survie": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    },
+    "F7": {
+      "n": 1429,
+      "survie": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "retour_nominal": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1429,
+        "survie": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    },
+    "F8": {
+      "n": 1429,
+      "survie": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "retour_nominal": {
+        "k": 1429,
+        "taux": 1,
+        "wilson95": [
+          0.9973189924139578,
+          1
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1429,
+        "survie": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1429,
+          "taux": 1,
+          "wilson95": [
+            0.9973189924139578,
+            1
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    },
+    "F9": {
+      "n": 1428,
+      "survie": {
+        "k": 1428,
+        "taux": 1,
+        "wilson95": [
+          0.997317119994655,
+          1
+        ]
+      },
+      "retour_nominal": {
+        "k": 1428,
+        "taux": 1,
+        "wilson95": [
+          0.997317119994655,
+          1
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1428,
+        "survie": {
+          "k": 1428,
+          "taux": 1,
+          "wilson95": [
+            0.997317119994655,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1428,
+          "taux": 1,
+          "wilson95": [
+            0.997317119994655,
+            1
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    },
+    "F10": {
+      "n": 1428,
+      "survie": {
+        "k": 1028,
+        "taux": 0.7198879551820728,
+        "wilson95": [
+          0.6960311173278331,
+          0.7425649270395642
+        ]
+      },
+      "retour_nominal": {
+        "k": 572,
+        "taux": 0.4005602240896359,
+        "wilson95": [
+          0.37544468971230316,
+          0.42620932844002035
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 400,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 400,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1428,
+        "survie": {
+          "k": 1028,
+          "taux": 0.7198879551820728,
+          "wilson95": [
+            0.6960311173278331,
+            0.7425649270395642
+          ]
+        },
+        "retour_nominal": {
+          "k": 572,
+          "taux": 0.4005602240896359,
+          "wilson95": [
+            0.37544468971230316,
+            0.42620932844002035
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    },
+    "F11": {
+      "n": 1428,
+      "survie": {
+        "k": 1428,
+        "taux": 1,
+        "wilson95": [
+          0.997317119994655,
+          1
+        ]
+      },
+      "retour_nominal": {
+        "k": 1428,
+        "taux": 1,
+        "wilson95": [
+          0.997317119994655,
+          1
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1428,
+        "survie": {
+          "k": 1428,
+          "taux": 1,
+          "wilson95": [
+            0.997317119994655,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1428,
+          "taux": 1,
+          "wilson95": [
+            0.997317119994655,
+            1
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    },
+    "F12": {
+      "n": 1428,
+      "survie": {
+        "k": 1428,
+        "taux": 1,
+        "wilson95": [
+          0.997317119994655,
+          1
+        ]
+      },
+      "retour_nominal": {
+        "k": 1428,
+        "taux": 1,
+        "wilson95": [
+          0.997317119994655,
+          1
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1428,
+        "survie": {
+          "k": 1428,
+          "taux": 1,
+          "wilson95": [
+            0.997317119994655,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1428,
+          "taux": 1,
+          "wilson95": [
+            0.997317119994655,
+            1
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    },
+    "F13": {
+      "n": 1428,
+      "survie": {
+        "k": 1428,
+        "taux": 1,
+        "wilson95": [
+          0.997317119994655,
+          1
+        ]
+      },
+      "retour_nominal": {
+        "k": 1428,
+        "taux": 1,
+        "wilson95": [
+          0.997317119994655,
+          1
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 0,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1428,
+        "survie": {
+          "k": 1428,
+          "taux": 1,
+          "wilson95": [
+            0.997317119994655,
+            1
+          ]
+        },
+        "retour_nominal": {
+          "k": 1428,
+          "taux": 1,
+          "wilson95": [
+            0.997317119994655,
+            1
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    },
+    "D1": {
+      "n": 1428,
+      "survie": {
+        "k": 0,
+        "taux": 0,
+        "wilson95": [
+          0,
+          0.002682880005345048
+        ]
+      },
+      "retour_nominal": {
+        "k": 0,
+        "taux": 0,
+        "wilson95": [
+          0,
+          0.002682880005345048
+        ]
+      },
+      "categories": {
+        "principale": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 1428,
+          "E3 DEAD": 0,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        },
+        "toutes_applicables": {
+          "E1 VITAL_LOSS": 0,
+          "E2 THERMAL": 1428,
+          "E3 DEAD": 1428,
+          "E4 BOOT_LOOP": 0,
+          "E5 POWER": 0,
+          "E6 COMMS_LOST": 0,
+          "E7 CMD_INTEGRITY": 0,
+          "E8 SILENT_LIE": 0
+        }
+      },
+      "injection_jamais_appliquee": 0,
+      "hors_injections_non_appliquees": {
+        "n": 1428,
+        "survie": {
+          "k": 0,
+          "taux": 0,
+          "wilson95": [
+            0,
+            0.002682880005345048
+          ]
+        },
+        "retour_nominal": {
+          "k": 0,
+          "taux": 0,
+          "wilson95": [
+            0,
+            0.002682880005345048
+          ]
+        }
+      },
+      "paniques_firmware_comptees": 0
+    }
+  },
+  "debit": {
+    "duree_s": 257.986775681,
+    "runs_par_s": 77.52335346339594
+  }
+}
