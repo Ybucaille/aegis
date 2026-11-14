@@ -15,3 +15,14 @@ une décision (`grep -c "CORRIGER\|DOCUMENTER" docs/triage.md` >= nombre de coup
 par le manager avec la liste ; `git status --porcelain docs/SPEC.md` → vide.
 Ajout T-019 : l'oracle n'est plus modifiable (B2 était le seul correctif d'oracle, fait avant tout run). Les échecs F5/E2 protégés vus à la répétition (5/143) sont à instruire ici par rejeu.
 ## Compte rendu (rempli par l'agent)
+Fait. `docs/triage.md` écrit ; entrée ajoutée en fin de `docs/decisions.md`. Rien de commité.
+- F5/E2 (40) : CORRIGER. Cause établie (CSV exhaustif : 40/40 = `ILineHeater` hors plage haute ; rejeux protégés
+  4781019819541052408, 2990178190404449115, 14486980315370451616 = `THERMAL` ; rejeu non protégé de la première
+  = `OK_NOMINAL` ; code `fdir::latchup` sans borne de plausibilité). Les 5/143 de la répétition : même mécanisme
+  (non rejoués un par un, hypothèse cohérente avec 40/40 ici).
+- F10/E2 (400) : DOCUMENTER (confirmé). D1/E2+E3 (1428) : DOCUMENTER (SPEC §7 + 0 reset sur 2428 runs, SoC min 24,3 %).
+- Correctifs : C1 seul (T-023). T-024 vide. T-030 : oui, exécution après T-023.
+- Pas fait : aucun rejeu F10 supplémentaire (dépouillement CSV jugé suffisant) ; la piste « délestage anticipé »
+  pour F10 n'est pas instruite (fonctionnalité nouvelle).
+- Commandes : `grep -c "CORRIGER\|DOCUMENTER" docs/triage.md` → 6 (>= 3 couples) ; `git status --porcelain docs/SPEC.md
+  firmware sim` → vide ; `sha256sum results/main/runs.csv` → fa7739d2…15dbab (inchangé par les rejeux, à comparer à T-020).

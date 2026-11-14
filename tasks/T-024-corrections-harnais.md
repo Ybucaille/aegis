@@ -12,3 +12,4 @@ Critère de fin (vérifiable): un test par correctif ; `./scripts/ci.sh` → `CI
 `cargo test --release -p sim --test determinism` vert ; `git diff --stat` (ou liste des fichiers modifiés) dans
 le compte rendu, avec mention explicite « oracle.rs : non modifié » ou la référence de la décision.
 ## Compte rendu (rempli par l'agent)
+Tâche VIDE (T-022 : E0 = 0, aucun bogue de harnais listé), close par le manager. oracle.rs : non modifié.
