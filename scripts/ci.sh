@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI locale Aegis (pas de CI distante). Échoue au premier contrôle rouge.
+# CI Aegis, lancée en local et par GitHub Actions (.github/workflows/ci.yml). Échoue au premier contrôle rouge.
 # Usage : ./scripts/ci.sh   (depuis n'importe où ; code retour 0 = « CI OK »)
 set -euo pipefail
 
