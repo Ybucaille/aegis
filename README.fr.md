@@ -1,5 +1,8 @@
 # Aegis
 
+[![CI](https://github.com/Ybucaille/aegis/actions/workflows/ci.yml/badge.svg)](https://github.com/Ybucaille/aegis/actions/workflows/ci.yml)
+[![Licence : MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+
 *[English version](README.md)*
 
 Aegis est une **simulation** sur PC : firmware de CubeSat tolérant aux radiations (Rust `no_std`),
@@ -15,7 +18,7 @@ Lancer les commandes depuis la racine du dépôt.
 cargo test --release -p firmware
 ```
 
-La CI locale complète est `./scripts/ci.sh` ; ce README ne cite que les tests du firmware.
+La CI complète est `./scripts/ci.sh`, aussi lancée par GitHub Actions à chaque push ; ce README ne cite que les tests du firmware.
 
 ## Vol nominal (texte, sans panne)
 
@@ -61,6 +64,8 @@ cargo run --release -p sim --bin campaign -- --replay 13679457532755275413 --see
 ```
 cargo run --release -p dashboard -- --port 8080
 ```
+
+![Dashboard d'Aegis pendant un vol simulé, après injection d'un latch-up sur la ligne Payload](docs/img/dashboard.png)
 
 Écoute sur `127.0.0.1:8080` jusqu'à Ctrl+C. Routes : `GET /`, `GET /api/state`,
 `GET /api/campaign?name=<dossier sous results/>`, `POST /api/fault`, `POST /api/cmd`.

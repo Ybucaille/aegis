@@ -1,5 +1,8 @@
 # Aegis
 
+[![CI](https://github.com/Ybucaille/aegis/actions/workflows/ci.yml/badge.svg)](https://github.com/Ybucaille/aegis/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 *[Version française](README.fr.md)*
 
 **A radiation-tolerant CubeSat firmware, tested against tens of thousands of injected faults — in simulation.**
@@ -12,6 +15,11 @@ question with numbers: *when radiation corrupts the electronics, does the satell
 > software models written by the same team. No real hardware, no real radiation environment, no
 > certification or qualification claim. The survival rates describe a program facing a fault model;
 > they do not predict the survival of a spacecraft.
+
+![Aegis dashboard: live state, power and thermal, ground link, fault injection and telecommands](docs/img/dashboard.png)
+
+*The web dashboard (UI in French) during a simulated flight: a latch-up was injected on the payload line
+at t = 7044 s; about 40 simulated minutes later the satellite is still nominal and acknowledging pings.*
 
 ## Headline result
 
