@@ -1,5 +1,7 @@
 # Aegis
 
+*[English version](README.md)*
+
 Aegis est une **simulation** sur PC : firmware de CubeSat tolérant aux radiations (Rust `no_std`),
 simulateur, ground station simulée, dashboard web. Aucun matériel réel, **aucune certification** :
 ce dépôt ne permet pas de conclure à une conformité spatiale. Cadre exact : `docs/SPEC.md`.
